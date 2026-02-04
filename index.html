@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Doober's Adventures</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: linear-gradient(135deg, #2c1810 0%, #4a2c17 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      touch-action: none;
+      overflow: hidden;
+    }
+    #game-container {
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    canvas {
+      display: block;
+      background: #f5e6d3;
+    }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+    .meter {
+      background: rgba(0,0,0,0.6);
+      border-radius: 20px;
+      padding: 8px 16px;
+      color: white;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .meter-bar {
+      height: 12px;
+      border-radius: 6px;
+      margin-top: 4px;
+      transition: width 0.3s;
+    }
+    #mischief-bar { background: linear-gradient(90deg, #f39c12, #e74c3c); }
+    #anger-bar { background: linear-gradient(90deg, #e74c3c, #8e44ad); }
+    #phase-indicator {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.6);
+      color: white;
+      padding: 6px 16px;
+      border-radius: 12px;
+      font-size: 12px;
+    }
+    #message {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.85);
+      color: white;
+      padding: 24px 48px;
+      border-radius: 16px;
+      font-size: 24px;
+      text-align: center;
+      display: none;
+    }
+    #message button {
+      margin-top: 16px;
+      padding: 12px 32px;
+      font-size: 18px;
+      border: none;
+      border-radius: 8px;
+      background: #27ae60;
+      color: white;
+      cursor: pointer;
+    }
+    #instructions {
+      color: #d4a574;
+      margin-top: 16px;
+      text-align: center;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game"></canvas>
+    <div id="ui">
+      <div class="meter" id="mischief-meter">
+        🐕 Mischief
+        <div id="mischief-bar" class="meter-bar" style="width: 0px;"></div>
+      </div>
+      <div class="meter" id="anger-meter" style="display: none;">
+        😠 Anger
+        <div id="anger-bar" class="meter-bar" style="width: 100px;"></div>
+      </div>
+    </div>
+    <div id="phase-indicator">🐕 Cause mischief!</div>
+    <div id="message">
+      <div id="message-text"></div>
+      <button onclick="startGame()">Play Again</button>
+    </div>
+  </div>
+  <div id="instructions">
+    Arrow keys / WASD to move • Cause trouble • Hide when owners are mad!
+  </div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// Responsive sizing
+const TILE = 40;
+const COLS = 12;
+const ROWS = 10;
+canvas.width = COLS * TILE;
+canvas.height = ROWS * TILE;
+
+// Game state
+let gamePhase = 'mischief'; // 'mischief', 'hide', 'calm', 'win', 'lose'
+let mischiefLevel = 0;
+let angerLevel = 100;
+const MISCHIEF_MAX = 100;
+const MISCHIEF_TRIGGER = 80;
+
+// House layout (0=floor, 1=wall, 2=furniture, 3=mischief spot, 4=hiding spot, 5=door)
+const houseMap = [
+  [1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,0,0,0,1,0,0,3,0,0,0,1],
+  [1,0,4,0,1,0,0,0,0,4,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,1],
+  [1,1,1,0,1,0,0,0,1,0,1,1],
+  [1,3,0,0,0,0,0,0,0,0,3,1],
+  [1,0,0,0,0,0,0,0,0,0,0,1],
+  [1,4,0,0,0,0,0,0,0,0,4,1],
+  [1,0,0,3,0,0,0,0,3,0,0,1],
+  [1,1,1,1,1,1,1,1,1,1,1,1],
+];
+
+// Mischief spots with descriptions
+const mischiefSpots = [
+  { x: 7, y: 1, name: 'Kitchen trash', used: false },
+  { x: 1, y: 5, name: 'Shoes', used: false },
+  { x: 10, y: 5, name: 'Plant', used: false },
+  { x: 3, y: 8, name: 'Couch cushions', used: false },
+  { x: 8, y: 8, name: 'Food bowl', used: false },
+];
+
+// Hiding spots
+const hidingSpots = [
+  { x: 2, y: 2 }, { x: 9, y: 2 },
+  { x: 1, y: 7 }, { x: 10, y: 7 },
+];
+
+// Doober (the beagle)
+const doober = {
+  x: 5, y: 5,
+  targetX: 5, targetY: 5,
+  speed: 0.15,
+  hidden: false,
+  tailWag: 0,
+};
+
+// Check if a tile is walkable
+function isWalkable(x, y) {
+  if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return false;
+  const tile = houseMap[y][x];
+  return tile !== 1; // Only walls block
+}
+
+// Owners with wall-respecting movement
+const owners = [
+  { x: 6, y: 3, speed: 0.02, dir: 1, vertical: false },
+  { x: 5, y: 6, speed: 0.015, dir: 1, vertical: true },
+];
+
+// Colors
+const colors = {
+  floor: '#f5e6d3',
+  wall: '#8b5e3c',
+  furniture: '#6b4423',
+  mischief: '#ffeaa7',
+  hiding: '#a29bfe',
+  doober: '#d4a574',
+  dooberDark: '#a67c52',
+  owner: '#636e72',
+  ownerCalm: '#55a3ff',
+  heart: '#e74c3c',
+};
+
+// Input handling
+document.addEventListener('keydown', (e) => {
+  if (gamePhase === 'win' || gamePhase === 'lose') return;
+  let newX = Math.round(doober.targetX);
+  let newY = Math.round(doober.targetY);
+  
+  if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') newY--;
+  else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') newY++;
+  else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') newX--;
+  else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') newX++;
+  else return;
+  
+  e.preventDefault();
+  if (isWalkable(newX, newY)) {
+    doober.targetX = newX;
+    doober.targetY = newY;
+  }
+});
+
+canvas.addEventListener('click', handleInput);
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  handleInput(e.touches[0]);
+});
+
+function handleInput(e) {
+  if (gamePhase === 'win' || gamePhase === 'lose') return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / TILE);
+  const y = Math.floor((e.clientY - rect.top) / TILE);
+  
+  if (isWalkable(x, y)) {
+    doober.targetX = x;
+    doober.targetY = y;
+  }
+}
+
+function distance(a, b) {
+  return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+}
+
+function updateOwner(owner) {
+  // Simple back-and-forth patrol that respects walls
+  if (owner.vertical) {
+    const nextY = owner.y + owner.dir * owner.speed;
+    const tileY = owner.dir > 0 ? Math.ceil(nextY) : Math.floor(nextY);
+    if (isWalkable(Math.round(owner.x), tileY)) {
+      owner.y = nextY;
+    } else {
+      owner.dir *= -1; // Reverse direction
+    }
+  } else {
+    const nextX = owner.x + owner.dir * owner.speed;
+    const tileX = owner.dir > 0 ? Math.ceil(nextX) : Math.floor(nextX);
+    if (isWalkable(tileX, Math.round(owner.y))) {
+      owner.x = nextX;
+    } else {
+      owner.dir *= -1; // Reverse direction
+    }
+  }
+}
+
+function update() {
+  // Move Doober
+  const dx = doober.targetX - doober.x;
+  const dy = doober.targetY - doober.y;
+  if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05) {
+    doober.x += dx * doober.speed;
+    doober.y += dy * doober.speed;
+  } else {
+    doober.x = doober.targetX;
+    doober.y = doober.targetY;
+  }
+  
+  // Tail wag animation
+  doober.tailWag += 0.2;
+  
+  // Check hiding
+  doober.hidden = false;
+  if (gamePhase === 'hide') {
+    for (const spot of hidingSpots) {
+      if (distance(doober, spot) < 0.8) {
+        doober.hidden = true;
+        break;
+      }
+    }
+  }
+  
+  // Phase-specific logic
+  if (gamePhase === 'mischief') {
+    document.getElementById('phase-indicator').textContent = '🐕 Cause mischief!';
+    
+    // Check mischief spots
+    for (const spot of mischiefSpots) {
+      if (!spot.used && distance(doober, spot) < 0.8) {
+        spot.used = true;
+        mischiefLevel += 20;
+        showFloatingText(spot.x * TILE, spot.y * TILE, '+20 Mischief!');
+      }
+    }
+    
+    // Trigger anger phase
+    if (mischiefLevel >= MISCHIEF_TRIGGER) {
+      gamePhase = 'hide';
+      angerLevel = 100;
+      document.getElementById('mischief-meter').style.display = 'none';
+      document.getElementById('anger-meter').style.display = 'block';
+    }
+  } else if (gamePhase === 'hide') {
+    document.getElementById('phase-indicator').textContent = '🙈 HIDE! Owners are angry!';
+    
+    // Move owners
+    for (const owner of owners) {
+      updateOwner(owner);
+      
+      // Check if owner catches Doober
+      if (!doober.hidden && distance(doober, owner) < 1.2) {
+        gamePhase = 'lose';
+        showMessage('🐕📦 CAUGHT!<br>Doober goes in the crate...');
+        return;
+      }
+    }
+    
+    // Anger decreases over time
+    angerLevel -= 0.1;
+    document.getElementById('anger-bar').style.width = angerLevel + 'px';
+    
+    if (angerLevel <= 0) {
+      angerLevel = 0;
+      gamePhase = 'calm';
+      document.getElementById('phase-indicator').textContent = '💕 Owners calmed down! Go get love!';
+    }
+  } else if (gamePhase === 'calm') {
+    // Move owners (still patrolling but calm now)
+    for (const owner of owners) {
+      updateOwner(owner);
+      
+      // Win condition: reach a calm owner
+      if (distance(doober, owner) < 1.5) {
+        gamePhase = 'win';
+        showMessage('💕💕💕 YOU WIN! 💕💕💕<br>The owners love Doober!');
+        return;
+      }
+    }
+  }
+  
+  // Update UI
+  document.getElementById('mischief-bar').style.width = (mischiefLevel / MISCHIEF_MAX * 100) + 'px';
+}
+
+let floatingTexts = [];
+function showFloatingText(x, y, text) {
+  floatingTexts.push({ x, y, text, life: 60 });
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw house
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const tile = houseMap[y][x];
+      ctx.fillStyle = colors.floor;
+      ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+      
+      if (tile === 1) {
+        ctx.fillStyle = colors.wall;
+        ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+      } else if (tile === 3) {
+        // Mischief spot
+        const spot = mischiefSpots.find(s => s.x === x && s.y === y);
+        if (spot && !spot.used && gamePhase === 'mischief') {
+          ctx.fillStyle = colors.mischief;
+          ctx.beginPath();
+          ctx.arc(x * TILE + TILE/2, y * TILE + TILE/2, TILE/3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#333';
+          ctx.font = '16px sans-serif';
+          ctx.fillText('❗', x * TILE + TILE/2 - 6, y * TILE + TILE/2 + 6);
+        }
+      } else if (tile === 4) {
+        // Hiding spot
+        if (gamePhase === 'hide') {
+          ctx.fillStyle = colors.hiding;
+          ctx.globalAlpha = 0.5 + Math.sin(doober.tailWag * 2) * 0.2;
+          ctx.fillRect(x * TILE + 2, y * TILE + 2, TILE - 4, TILE - 4);
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = '#333';
+          ctx.font = '14px sans-serif';
+          ctx.fillText('🛋️', x * TILE + TILE/2 - 8, y * TILE + TILE/2 + 5);
+        }
+      }
+    }
+  }
+  
+  // Draw owners
+  for (const owner of owners) {
+    const isCalm = gamePhase === 'calm' || gamePhase === 'win';
+    ctx.fillStyle = isCalm ? colors.ownerCalm : colors.owner;
+    ctx.beginPath();
+    ctx.arc(owner.x * TILE + TILE/2, owner.y * TILE + TILE/2, TILE/2.5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Face
+    ctx.font = '20px sans-serif';
+    let emoji = '😐';
+    if (gamePhase === 'hide') emoji = '😠';
+    else if (isCalm) emoji = '😊';
+    ctx.fillText(emoji, owner.x * TILE + TILE/2 - 10, owner.y * TILE + TILE/2 + 7);
+    
+    // Hearts when calm/won
+    if (isCalm) {
+      ctx.font = '16px sans-serif';
+      const heartY = owner.y * TILE - 10 + Math.sin(doober.tailWag + owner.x) * 5;
+      ctx.fillText('💕', owner.x * TILE + TILE/2 - 8, heartY);
+    }
+  }
+  
+  // Draw Doober
+  if (!doober.hidden || gamePhase !== 'hide') {
+    const dx = doober.x * TILE + TILE/2;
+    const dy = doober.y * TILE + TILE/2;
+    
+    // Body
+    ctx.fillStyle = colors.doober;
+    ctx.beginPath();
+    ctx.ellipse(dx, dy, TILE/2.2, TILE/3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Head
+    ctx.beginPath();
+    ctx.arc(dx + TILE/4, dy - 2, TILE/4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Ears
+    ctx.fillStyle = colors.dooberDark;
+    ctx.beginPath();
+    ctx.ellipse(dx + TILE/3 - 5, dy - TILE/4, 6, 10, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(dx + TILE/3 + 8, dy - TILE/4, 6, 10, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Tail (wagging!)
+    ctx.strokeStyle = colors.doober;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    const tailWag = Math.sin(doober.tailWag) * 8;
+    ctx.moveTo(dx - TILE/3, dy);
+    ctx.quadraticCurveTo(dx - TILE/2, dy + tailWag, dx - TILE/2 - 5, dy - 5 + tailWag);
+    ctx.stroke();
+    
+    // Eyes
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(dx + TILE/4 - 3, dy - 5, 2, 0, Math.PI * 2);
+    ctx.arc(dx + TILE/4 + 5, dy - 5, 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Nose
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(dx + TILE/3 + 2, dy, 3, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    // Hidden indicator
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = colors.doober;
+    const dx = doober.x * TILE + TILE/2;
+    const dy = doober.y * TILE + TILE/2;
+    ctx.beginPath();
+    ctx.arc(dx, dy, TILE/4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.font = '12px sans-serif';
+    ctx.fillText('🤫', dx - 6, dy + 4);
+  }
+  
+  // Floating texts
+  for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    const ft = floatingTexts[i];
+    ft.y -= 1;
+    ft.life--;
+    ctx.globalAlpha = ft.life / 60;
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText(ft.text, ft.x, ft.y);
+    ctx.globalAlpha = 1;
+    if (ft.life <= 0) floatingTexts.splice(i, 1);
+  }
+}
+
+function showMessage(text) {
+  document.getElementById('message-text').innerHTML = text;
+  document.getElementById('message').style.display = 'block';
+}
+
+function startGame() {
+  gamePhase = 'mischief';
+  mischiefLevel = 0;
+  angerLevel = 100;
+  doober.x = 5; doober.y = 5;
+  doober.targetX = 5; doober.targetY = 5;
+  doober.hidden = false;
+  mischiefSpots.forEach(s => s.used = false);
+  owners[0].x = 6; owners[0].y = 3; owners[0].dir = 1;
+  owners[1].x = 5; owners[1].y = 6; owners[1].dir = 1;
+  document.getElementById('mischief-meter').style.display = 'block';
+  document.getElementById('anger-meter').style.display = 'none';
+  document.getElementById('message').style.display = 'none';
+  document.getElementById('phase-indicator').textContent = '🐕 Cause mischief!';
+  floatingTexts = [];
+}
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+startGame();
+gameLoop();
+</script>
+</body>
+</html>
