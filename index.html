@@ -7,7 +7,7 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: linear-gradient(135deg, #2c1810 0%, #4a2c17 100%);
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -21,12 +21,10 @@
       position: relative;
       border-radius: 16px;
       overflow: hidden;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 60px rgba(255,200,100,0.1);
+      border: 3px solid #3a2a1a;
     }
-    canvas {
-      display: block;
-      background: #f5e6d3;
-    }
+    canvas { display: block; }
     #ui {
       position: absolute;
       top: 10px;
@@ -35,62 +33,110 @@
       display: flex;
       justify-content: space-between;
       pointer-events: none;
+      z-index: 100;
     }
     .meter {
-      background: rgba(0,0,0,0.6);
-      border-radius: 20px;
-      padding: 8px 16px;
+      background: rgba(0,0,0,0.75);
+      border-radius: 16px;
+      padding: 10px 16px;
       color: white;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: bold;
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .meter-label { display: flex; align-items: center; gap: 6px; }
+    .meter-bar-bg {
+      height: 14px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 7px;
+      margin-top: 6px;
+      overflow: hidden;
+      min-width: 120px;
     }
     .meter-bar {
-      height: 12px;
-      border-radius: 6px;
-      margin-top: 4px;
-      transition: width 0.3s;
+      height: 100%;
+      border-radius: 7px;
+      transition: width 0.3s ease;
     }
-    #mischief-bar { background: linear-gradient(90deg, #f39c12, #e74c3c); }
-    #anger-bar { background: linear-gradient(90deg, #e74c3c, #8e44ad); }
+    #mischief-fill { background: linear-gradient(90deg, #f39c12, #e74c3c); }
+    #anger-fill { background: linear-gradient(90deg, #e74c3c, #8e44ad); }
     #phase-indicator {
       position: absolute;
-      bottom: 10px;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: bold;
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255,255,255,0.15);
+      z-index: 100;
+    }
+    #room-indicator {
+      position: absolute;
+      top: 70px;
       left: 50%;
       transform: translateX(-50%);
       background: rgba(0,0,0,0.6);
-      color: white;
-      padding: 6px 16px;
+      color: #ffeaa7;
+      padding: 4px 14px;
       border-radius: 12px;
       font-size: 12px;
+      z-index: 100;
+      opacity: 0;
+      transition: opacity 0.3s;
     }
+    #room-indicator.visible { opacity: 1; }
     #message {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: rgba(0,0,0,0.85);
+      background: rgba(0,0,0,0.9);
       color: white;
-      padding: 24px 48px;
-      border-radius: 16px;
-      font-size: 24px;
+      padding: 32px 48px;
+      border-radius: 20px;
+      font-size: 26px;
       text-align: center;
       display: none;
+      z-index: 200;
+      border: 2px solid rgba(255,255,255,0.2);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     }
     #message button {
-      margin-top: 16px;
-      padding: 12px 32px;
+      margin-top: 20px;
+      padding: 14px 36px;
       font-size: 18px;
       border: none;
-      border-radius: 8px;
-      background: #27ae60;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #27ae60, #2ecc71);
       color: white;
       cursor: pointer;
+      font-weight: bold;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    #message button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 15px rgba(46, 204, 113, 0.4);
+    }
+    #minimap {
+      position: absolute;
+      bottom: 50px;
+      right: 10px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 8px;
+      opacity: 0.8;
+      z-index: 100;
     }
     #instructions {
-      color: #d4a574;
+      color: #a0a0a0;
       margin-top: 16px;
       text-align: center;
-      font-size: 14px;
+      font-size: 13px;
     }
   </style>
 </head>
@@ -99,166 +145,468 @@
     <canvas id="game"></canvas>
     <div id="ui">
       <div class="meter" id="mischief-meter">
-        🐕 Mischief
-        <div id="mischief-bar" class="meter-bar" style="width: 0px;"></div>
+        <div class="meter-label">🐕 Mischief</div>
+        <div class="meter-bar-bg"><div id="mischief-fill" class="meter-bar" style="width: 0%;"></div></div>
       </div>
       <div class="meter" id="anger-meter" style="display: none;">
-        😠 Anger
-        <div id="anger-bar" class="meter-bar" style="width: 100px;"></div>
+        <div class="meter-label">😠 Owner Anger</div>
+        <div class="meter-bar-bg"><div id="anger-fill" class="meter-bar" style="width: 100%;"></div></div>
       </div>
     </div>
+    <div id="room-indicator">Kitchen</div>
     <div id="phase-indicator">🐕 Cause mischief!</div>
+    <canvas id="minimap" width="120" height="100"></canvas>
     <div id="message">
       <div id="message-text"></div>
       <button onclick="startGame()">Play Again</button>
     </div>
   </div>
-  <div id="instructions">
-    Arrow keys / WASD to move • Cause trouble • Hide when owners are mad!
-  </div>
+  <div id="instructions">Arrow keys / WASD to move • Cause trouble • Hide when owners are mad!</div>
 
 <script>
+// ============================================
+// DOOBER'S ADVENTURES - Full House Edition
+// ============================================
+
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+const minimapCanvas = document.getElementById('minimap');
+const minimapCtx = minimapCanvas.getContext('2d');
 
-// Responsive sizing
+// Display settings
 const TILE = 40;
-const COLS = 12;
-const ROWS = 10;
-canvas.width = COLS * TILE;
-canvas.height = ROWS * TILE;
+const VIEWPORT_COLS = 16;
+const VIEWPORT_ROWS = 12;
+canvas.width = VIEWPORT_COLS * TILE;
+canvas.height = VIEWPORT_ROWS * TILE;
+
+// Map dimensions (60x50 = 3000 tiles)
+const MAP_COLS = 60;
+const MAP_ROWS = 50;
+
+// Camera
+const camera = { x: 0, y: 0 };
 
 // Game state
-let gamePhase = 'mischief'; // 'mischief', 'hide', 'calm', 'win', 'lose'
+let gamePhase = 'mischief';
 let mischiefLevel = 0;
 let angerLevel = 100;
 const MISCHIEF_MAX = 100;
 const MISCHIEF_TRIGGER = 80;
+let currentRoom = '';
 
-// House layout (0=floor, 1=wall, 2=furniture, 3=mischief spot, 4=hiding spot, 5=door)
-const houseMap = [
-  [1,1,1,1,1,1,1,1,1,1,1,1],
-  [1,0,0,0,1,0,0,3,0,0,0,1],
-  [1,0,4,0,1,0,0,0,0,4,0,1],
-  [1,0,0,0,0,0,0,0,0,0,0,1],
-  [1,1,1,0,1,0,0,0,1,0,1,1],
-  [1,3,0,0,0,0,0,0,0,0,3,1],
-  [1,0,0,0,0,0,0,0,0,0,0,1],
-  [1,4,0,0,0,0,0,0,0,0,4,1],
-  [1,0,0,3,0,0,0,0,3,0,0,1],
-  [1,1,1,1,1,1,1,1,1,1,1,1],
-];
+// Tile types
+const T = {
+  FLOOR: 0,
+  WALL: 1,
+  FURNITURE: 2,
+  MISCHIEF: 3,
+  HIDING: 4,
+  DOOR: 5,
+  GRASS: 6,
+  WATER: 7,
+  COUNTER: 8,
+  TABLE: 9,
+  COUCH: 10,
+  BED: 11,
+  TV: 12,
+  TOILET: 13,
+  TUB: 14,
+  FENCE: 15,
+};
 
-// Mischief spots with descriptions
+// Room definitions
+const rooms = {
+  kitchen:    { x: 2,  y: 22, w: 16, h: 14, name: 'Kitchen', color: '#f5e6d3' },
+  dining:     { x: 20, y: 22, w: 14, h: 12, name: 'Dining Room', color: '#f0e0c8' },
+  living:     { x: 36, y: 18, w: 22, h: 18, name: 'Living Room', color: '#e8dcc8' },
+  entry:      { x: 2,  y: 38, w: 12, h: 10, name: 'Entry', color: '#d8cbb8' },
+  backyard:   { x: 20, y: 38, w: 38, h: 10, name: 'Backyard', color: '#90c970' },
+  bathroom:   { x: 2,  y: 6,  w: 10, h: 8,  name: 'Bathroom', color: '#d0e8f0' },
+  bedroom:    { x: 14, y: 4,  w: 16, h: 14, name: 'Bedroom', color: '#e8d8c8' },
+  kidsroom:   { x: 32, y: 4,  w: 14, h: 12, name: "Kid's Room", color: '#f8e8d0' },
+  hallway:    { x: 2,  y: 16, w: 56, h: 4,  name: 'Hallway', color: '#d0c4b0' },
+};
+
+// Generate the map
+const houseMap = [];
+const collisionMap = [];
+for (let y = 0; y < MAP_ROWS; y++) {
+  houseMap[y] = [];
+  collisionMap[y] = [];
+  for (let x = 0; x < MAP_COLS; x++) {
+    houseMap[y][x] = T.WALL;
+    collisionMap[y][x] = 1;
+  }
+}
+
+// Helper to fill rooms
+function fillRoom(room, floorType = T.FLOOR) {
+  for (let y = room.y; y < room.y + room.h; y++) {
+    for (let x = room.x; x < room.x + room.w; x++) {
+      if (x >= 0 && x < MAP_COLS && y >= 0 && y < MAP_ROWS) {
+        houseMap[y][x] = floorType;
+        collisionMap[y][x] = 0;
+      }
+    }
+  }
+}
+
+function placeTile(x, y, type, solid = true) {
+  if (x >= 0 && x < MAP_COLS && y >= 0 && y < MAP_ROWS) {
+    houseMap[y][x] = type;
+    collisionMap[y][x] = solid ? 1 : 0;
+  }
+}
+
+function placeRect(x, y, w, h, type, solid = true) {
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) {
+      placeTile(x + dx, y + dy, type, solid);
+    }
+  }
+}
+
+// Fill all rooms
+Object.values(rooms).forEach(r => {
+  fillRoom(r, r.name === 'Backyard' ? T.GRASS : T.FLOOR);
+});
+
+// Add doors/connections
+function addDoor(x, y, vertical = false) {
+  if (vertical) {
+    placeTile(x, y, T.DOOR, false);
+    placeTile(x, y+1, T.DOOR, false);
+  } else {
+    placeTile(x, y, T.DOOR, false);
+    placeTile(x+1, y, T.DOOR, false);
+  }
+}
+
+// Hallway to rooms doors
+addDoor(8, 20, true);   // kitchen to hallway
+addDoor(26, 20, true);  // dining to hallway
+addDoor(45, 18, true);  // living to hallway
+addDoor(8, 14, true);   // bathroom to hallway
+addDoor(22, 18, true);  // bedroom to hallway
+addDoor(38, 16, true);  // kids room to hallway
+addDoor(8, 38, true);   // entry to kitchen
+addDoor(20, 42, false); // entry to backyard
+addDoor(36, 36, true);  // living to backyard
+
+// Kitchen furniture
+placeRect(3, 23, 14, 2, T.COUNTER, true);  // top counter
+placeRect(3, 25, 2, 8, T.COUNTER, true);   // left counter
+placeRect(15, 25, 2, 6, T.COUNTER, true);  // right counter
+
+// Dining room furniture
+placeRect(23, 26, 4, 3, T.TABLE, true);    // dining table
+
+// Living room furniture
+placeRect(38, 20, 6, 3, T.COUCH, true);    // couch
+placeRect(50, 19, 3, 4, T.TV, true);       // TV
+
+// Bedroom furniture
+placeRect(16, 6, 4, 3, T.BED, true);       // bed
+placeRect(26, 6, 2, 3, T.FURNITURE, true); // dresser
+
+// Kid's room furniture
+placeRect(34, 6, 3, 2, T.BED, true);       // kid bed
+placeRect(42, 6, 2, 2, T.FURNITURE, true); // toy chest
+
+// Bathroom furniture
+placeTile(4, 8, T.TOILET, true);
+placeRect(8, 8, 3, 2, T.TUB, true);
+
+// Backyard
+placeRect(20, 38, 38, 1, T.FENCE, true);   // top fence
+placeRect(20, 47, 38, 1, T.FENCE, true);   // bottom fence
+placeRect(20, 38, 1, 10, T.FENCE, true);   // left fence
+placeRect(57, 38, 1, 10, T.FENCE, true);   // right fence
+
+// Mischief spots
 const mischiefSpots = [
-  { x: 7, y: 1, name: 'Kitchen trash', used: false },
-  { x: 1, y: 5, name: 'Shoes', used: false },
-  { x: 10, y: 5, name: 'Plant', used: false },
-  { x: 3, y: 8, name: 'Couch cushions', used: false },
-  { x: 8, y: 8, name: 'Food bowl', used: false },
+  // Kitchen
+  { x: 5, y: 32, name: 'Trash Can', room: 'kitchen', points: 15, used: false, emoji: '🗑️' },
+  { x: 14, y: 28, name: 'Counter Food', room: 'kitchen', points: 20, used: false, emoji: '🍖' },
+  // Dining
+  { x: 24, y: 27, name: 'TURKEY!', room: 'dining', points: 35, used: false, emoji: '🦃' },
+  // Living
+  { x: 48, y: 30, name: 'Dad\'s Shoes', room: 'living', points: 15, used: false, emoji: '👟' },
+  { x: 40, y: 22, name: 'Couch Cushions', room: 'living', points: 20, used: false, emoji: '🛋️' },
+  { x: 55, y: 25, name: 'Potted Plant', room: 'living', points: 15, used: false, emoji: '🪴' },
+  // Entry
+  { x: 5, y: 42, name: 'Shoe Rack', room: 'entry', points: 15, used: false, emoji: '👞' },
+  // Bathroom
+  { x: 4, y: 9, name: 'Toilet Water', room: 'bathroom', points: 10, used: false, emoji: '🚽' },
+  { x: 6, y: 11, name: 'Toilet Paper', room: 'bathroom', points: 15, used: false, emoji: '🧻' },
+  // Bedroom
+  { x: 18, y: 10, name: 'Pillows', room: 'bedroom', points: 15, used: false, emoji: '🛏️' },
+  { x: 27, y: 8, name: 'Laundry', room: 'bedroom', points: 20, used: false, emoji: '🧦' },
+  // Kid's room
+  { x: 38, y: 10, name: 'Chew Toys', room: 'kidsroom', points: 15, used: false, emoji: '🧸' },
+  { x: 44, y: 12, name: 'Homework', room: 'kidsroom', points: 25, used: false, emoji: '📝' },
+  // Backyard
+  { x: 30, y: 42, name: 'Dig Garden', room: 'backyard', points: 20, used: false, emoji: '🌷' },
+  { x: 45, y: 44, name: 'Dig Lawn', room: 'backyard', points: 15, used: false, emoji: '🕳️' },
+  { x: 52, y: 41, name: 'Chase Bird', room: 'backyard', points: 10, used: false, emoji: '🐦' },
 ];
+
+// Mark mischief spots on map
+mischiefSpots.forEach(spot => {
+  placeTile(spot.x, spot.y, T.MISCHIEF, false);
+});
 
 // Hiding spots
 const hidingSpots = [
-  { x: 2, y: 2 }, { x: 9, y: 2 },
-  { x: 1, y: 7 }, { x: 10, y: 7 },
+  { x: 10, y: 30, name: 'Behind Counter', room: 'kitchen' },
+  { x: 24, y: 30, name: 'Under Table', room: 'dining' },
+  { x: 42, y: 24, name: 'Behind Couch', room: 'living' },
+  { x: 56, y: 32, name: 'Behind Curtains', room: 'living' },
+  { x: 10, y: 44, name: 'Coat Closet', room: 'entry' },
+  { x: 10, y: 10, name: 'Shower Curtain', room: 'bathroom' },
+  { x: 16, y: 12, name: 'Under Bed', room: 'bedroom' },
+  { x: 28, y: 14, name: 'In Closet', room: 'bedroom' },
+  { x: 34, y: 10, name: 'Under Kid Bed', room: 'kidsroom' },
+  { x: 43, y: 8, name: 'Toy Chest', room: 'kidsroom' },
+  { x: 25, y: 45, name: 'Doghouse', room: 'backyard' },
+  { x: 50, y: 43, name: 'Bushes', room: 'backyard' },
 ];
 
-// Doober (the beagle)
+// Mark hiding spots
+hidingSpots.forEach(spot => {
+  placeTile(spot.x, spot.y, T.HIDING, false);
+});
+
+// Doober
 const doober = {
-  x: 5, y: 5,
-  targetX: 5, targetY: 5,
-  speed: 0.15,
+  x: 8, y: 17,
+  targetX: 8, targetY: 17,
+  speed: 0.12,
   hidden: false,
   tailWag: 0,
+  facing: 1, // 1=right, -1=left
 };
 
-// Check if a tile is walkable
-function isWalkable(x, y) {
-  if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return false;
-  const tile = houseMap[y][x];
-  return tile !== 1; // Only walls block
-}
-
-// Owners with wall-respecting movement
+// Owners
 const owners = [
-  { x: 6, y: 3, speed: 0.02, dir: 1, vertical: false },
-  { x: 5, y: 6, speed: 0.015, dir: 1, vertical: true },
+  {
+    name: 'Mom',
+    x: 10, y: 28,
+    homeX: 10, homeY: 28,
+    targetX: 10, targetY: 28,
+    speed: 0.04,
+    state: 'idle', // idle, searching, returning
+    emoji: '👩',
+    searchPath: [],
+    pathIndex: 0,
+  },
+  {
+    name: 'Dad',
+    x: 40, y: 24,
+    homeX: 40, homeY: 24,
+    targetX: 40, targetY: 24,
+    speed: 0.035,
+    state: 'idle',
+    emoji: '👨',
+    searchPath: [],
+    pathIndex: 0,
+  },
 ];
+
+// Simple A* pathfinding
+function findPath(startX, startY, endX, endY) {
+  const start = { x: Math.round(startX), y: Math.round(startY) };
+  const end = { x: Math.round(endX), y: Math.round(endY) };
+  
+  if (start.x === end.x && start.y === end.y) return [];
+  
+  const openSet = [{ ...start, g: 0, h: 0, f: 0, parent: null }];
+  const closedSet = new Set();
+  
+  function heuristic(a, b) {
+    return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+  }
+  
+  function key(n) { return `${n.x},${n.y}`; }
+  
+  while (openSet.length > 0) {
+    openSet.sort((a, b) => a.f - b.f);
+    const current = openSet.shift();
+    
+    if (current.x === end.x && current.y === end.y) {
+      const path = [];
+      let node = current;
+      while (node.parent) {
+        path.unshift({ x: node.x, y: node.y });
+        node = node.parent;
+      }
+      return path;
+    }
+    
+    closedSet.add(key(current));
+    
+    const neighbors = [
+      { x: current.x + 1, y: current.y },
+      { x: current.x - 1, y: current.y },
+      { x: current.x, y: current.y + 1 },
+      { x: current.x, y: current.y - 1 },
+    ];
+    
+    for (const n of neighbors) {
+      if (n.x < 0 || n.x >= MAP_COLS || n.y < 0 || n.y >= MAP_ROWS) continue;
+      if (collisionMap[n.y][n.x] === 1) continue;
+      if (closedSet.has(key(n))) continue;
+      
+      const g = current.g + 1;
+      const h = heuristic(n, end);
+      const f = g + h;
+      
+      const existing = openSet.find(o => o.x === n.x && o.y === n.y);
+      if (existing) {
+        if (g < existing.g) {
+          existing.g = g;
+          existing.f = f;
+          existing.parent = current;
+        }
+      } else {
+        openSet.push({ ...n, g, h, f, parent: current });
+      }
+    }
+    
+    if (openSet.length > 500) break; // Safety limit
+  }
+  
+  return [];
+}
 
 // Colors
 const colors = {
-  floor: '#f5e6d3',
-  wall: '#8b5e3c',
-  furniture: '#6b4423',
-  mischief: '#ffeaa7',
-  hiding: '#a29bfe',
-  doober: '#d4a574',
-  dooberDark: '#a67c52',
-  owner: '#636e72',
-  ownerCalm: '#55a3ff',
-  heart: '#e74c3c',
+  [T.FLOOR]: '#f5e6d3',
+  [T.WALL]: '#5c4033',
+  [T.FURNITURE]: '#8b6914',
+  [T.MISCHIEF]: '#ffeaa7',
+  [T.HIDING]: '#a29bfe',
+  [T.DOOR]: '#d4a574',
+  [T.GRASS]: '#7cb342',
+  [T.WATER]: '#4fc3f7',
+  [T.COUNTER]: '#a0826d',
+  [T.TABLE]: '#8d6e63',
+  [T.COUCH]: '#7986cb',
+  [T.BED]: '#ce93d8',
+  [T.TV]: '#37474f',
+  [T.TOILET]: '#e0e0e0',
+  [T.TUB]: '#b3e5fc',
+  [T.FENCE]: '#6d4c41',
 };
 
-// Input handling
+// Input
 document.addEventListener('keydown', (e) => {
   if (gamePhase === 'win' || gamePhase === 'lose') return;
+  
   let newX = Math.round(doober.targetX);
   let newY = Math.round(doober.targetY);
   
   if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') newY--;
   else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') newY++;
-  else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') newX--;
-  else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') newX++;
+  else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { newX--; doober.facing = -1; }
+  else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { newX++; doober.facing = 1; }
   else return;
   
   e.preventDefault();
-  if (isWalkable(newX, newY)) {
+  if (newX >= 0 && newX < MAP_COLS && newY >= 0 && newY < MAP_ROWS && collisionMap[newY][newX] === 0) {
     doober.targetX = newX;
     doober.targetY = newY;
   }
 });
 
-canvas.addEventListener('click', handleInput);
-canvas.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  handleInput(e.touches[0]);
-});
-
-function handleInput(e) {
-  if (gamePhase === 'win' || gamePhase === 'lose') return;
-  
-  const rect = canvas.getBoundingClientRect();
-  const x = Math.floor((e.clientX - rect.left) / TILE);
-  const y = Math.floor((e.clientY - rect.top) / TILE);
-  
-  if (isWalkable(x, y)) {
-    doober.targetX = x;
-    doober.targetY = y;
-  }
-}
-
 function distance(a, b) {
   return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
 }
 
-function updateOwner(owner) {
-  // Simple back-and-forth patrol that respects walls
-  if (owner.vertical) {
-    const nextY = owner.y + owner.dir * owner.speed;
-    const tileY = owner.dir > 0 ? Math.ceil(nextY) : Math.floor(nextY);
-    if (isWalkable(Math.round(owner.x), tileY)) {
-      owner.y = nextY;
-    } else {
-      owner.dir *= -1; // Reverse direction
+function getCurrentRoom(x, y) {
+  for (const [name, room] of Object.entries(rooms)) {
+    if (x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h) {
+      return room.name;
     }
-  } else {
-    const nextX = owner.x + owner.dir * owner.speed;
-    const tileX = owner.dir > 0 ? Math.ceil(nextX) : Math.floor(nextX);
-    if (isWalkable(tileX, Math.round(owner.y))) {
-      owner.x = nextX;
+  }
+  return '';
+}
+
+// Floating text effects
+let floatingTexts = [];
+function showFloatingText(x, y, text, color = '#e74c3c') {
+  floatingTexts.push({ x, y, text, color, life: 60 });
+}
+
+function updateOwner(owner) {
+  if (owner.state === 'idle') {
+    // Stay at home position during mischief phase
+    return;
+  }
+  
+  if (owner.state === 'searching') {
+    // Follow path or generate new one
+    if (owner.searchPath.length === 0 || owner.pathIndex >= owner.searchPath.length) {
+      // Generate search pattern - try to find Doober or patrol
+      const searchPoints = [
+        { x: 8, y: 17 },   // hallway
+        { x: 30, y: 17 },  // hallway mid
+        { x: 45, y: 17 },  // hallway right
+        { x: 10, y: 30 },  // kitchen
+        { x: 24, y: 28 },  // dining
+        { x: 45, y: 28 },  // living
+        { x: 8, y: 42 },   // entry
+        { x: 8, y: 10 },   // bathroom
+        { x: 22, y: 10 },  // bedroom
+        { x: 40, y: 10 },  // kidsroom
+      ];
+      const target = searchPoints[Math.floor(Math.random() * searchPoints.length)];
+      owner.searchPath = findPath(owner.x, owner.y, target.x, target.y);
+      owner.pathIndex = 0;
+    }
+    
+    if (owner.searchPath.length > 0 && owner.pathIndex < owner.searchPath.length) {
+      const next = owner.searchPath[owner.pathIndex];
+      const dx = next.x - owner.x;
+      const dy = next.y - owner.y;
+      
+      if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+        owner.x += Math.sign(dx) * owner.speed;
+        owner.y += Math.sign(dy) * owner.speed;
+      } else {
+        owner.pathIndex++;
+      }
+    }
+  }
+  
+  if (owner.state === 'returning') {
+    const dx = owner.homeX - owner.x;
+    const dy = owner.homeY - owner.y;
+    
+    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+      if (owner.searchPath.length === 0) {
+        owner.searchPath = findPath(owner.x, owner.y, owner.homeX, owner.homeY);
+        owner.pathIndex = 0;
+      }
+      
+      if (owner.searchPath.length > 0 && owner.pathIndex < owner.searchPath.length) {
+        const next = owner.searchPath[owner.pathIndex];
+        const pdx = next.x - owner.x;
+        const pdy = next.y - owner.y;
+        
+        if (Math.abs(pdx) > 0.1 || Math.abs(pdy) > 0.1) {
+          owner.x += Math.sign(pdx) * owner.speed * 0.7;
+          owner.y += Math.sign(pdy) * owner.speed * 0.7;
+        } else {
+          owner.pathIndex++;
+        }
+      }
     } else {
-      owner.dir *= -1; // Reverse direction
+      owner.x = owner.homeX;
+      owner.y = owner.homeY;
+      owner.state = 'idle';
+      owner.searchPath = [];
     }
   }
 }
@@ -275,71 +623,87 @@ function update() {
     doober.y = doober.targetY;
   }
   
-  // Tail wag animation
-  doober.tailWag += 0.2;
+  doober.tailWag += 0.15;
+  
+  // Update current room
+  const room = getCurrentRoom(doober.x, doober.y);
+  if (room !== currentRoom) {
+    currentRoom = room;
+    const indicator = document.getElementById('room-indicator');
+    indicator.textContent = room || 'Hallway';
+    indicator.classList.add('visible');
+    setTimeout(() => indicator.classList.remove('visible'), 2000);
+  }
   
   // Check hiding
   doober.hidden = false;
   if (gamePhase === 'hide') {
     for (const spot of hidingSpots) {
-      if (distance(doober, spot) < 0.8) {
+      if (distance(doober, spot) < 1.2) {
         doober.hidden = true;
         break;
       }
     }
   }
   
-  // Phase-specific logic
+  // Update camera
+  camera.x = Math.max(0, Math.min(MAP_COLS - VIEWPORT_COLS, doober.x - VIEWPORT_COLS / 2));
+  camera.y = Math.max(0, Math.min(MAP_ROWS - VIEWPORT_ROWS, doober.y - VIEWPORT_ROWS / 2));
+  
+  // Phase logic
   if (gamePhase === 'mischief') {
     document.getElementById('phase-indicator').textContent = '🐕 Cause mischief!';
     
     // Check mischief spots
     for (const spot of mischiefSpots) {
-      if (!spot.used && distance(doober, spot) < 0.8) {
+      if (!spot.used && distance(doober, spot) < 1.2) {
         spot.used = true;
-        mischiefLevel += 20;
-        showFloatingText(spot.x * TILE, spot.y * TILE, '+20 Mischief!');
+        mischiefLevel = Math.min(MISCHIEF_MAX, mischiefLevel + spot.points);
+        showFloatingText(spot.x * TILE, spot.y * TILE, `+${spot.points} ${spot.emoji}`, '#f39c12');
       }
     }
     
-    // Trigger anger phase
     if (mischiefLevel >= MISCHIEF_TRIGGER) {
       gamePhase = 'hide';
       angerLevel = 100;
+      owners.forEach(o => {
+        o.state = 'searching';
+        o.searchPath = [];
+      });
       document.getElementById('mischief-meter').style.display = 'none';
       document.getElementById('anger-meter').style.display = 'block';
     }
   } else if (gamePhase === 'hide') {
-    document.getElementById('phase-indicator').textContent = '🙈 HIDE! Owners are angry!';
+    document.getElementById('phase-indicator').textContent = '🙈 HIDE! Owners are looking!';
     
-    // Move owners
     for (const owner of owners) {
       updateOwner(owner);
       
-      // Check if owner catches Doober
-      if (!doober.hidden && distance(doober, owner) < 1.2) {
+      if (!doober.hidden && distance(doober, owner) < 2) {
         gamePhase = 'lose';
         showMessage('🐕📦 CAUGHT!<br>Doober goes in the crate...');
         return;
       }
     }
     
-    // Anger decreases over time
-    angerLevel -= 0.1;
-    document.getElementById('anger-bar').style.width = angerLevel + 'px';
+    angerLevel -= 0.08;
+    document.getElementById('anger-fill').style.width = angerLevel + '%';
     
     if (angerLevel <= 0) {
       angerLevel = 0;
       gamePhase = 'calm';
-      document.getElementById('phase-indicator').textContent = '💕 Owners calmed down! Go get love!';
+      owners.forEach(o => {
+        o.state = 'returning';
+        o.searchPath = [];
+      });
     }
   } else if (gamePhase === 'calm') {
-    // Move owners (still patrolling but calm now)
+    document.getElementById('phase-indicator').textContent = '💕 Go get love from owners!';
+    
     for (const owner of owners) {
       updateOwner(owner);
       
-      // Win condition: reach a calm owner
-      if (distance(doober, owner) < 1.5) {
+      if (owner.state === 'idle' && distance(doober, owner) < 2) {
         gamePhase = 'win';
         showMessage('💕💕💕 YOU WIN! 💕💕💕<br>The owners love Doober!');
         return;
@@ -347,150 +711,305 @@ function update() {
     }
   }
   
-  // Update UI
-  document.getElementById('mischief-bar').style.width = (mischiefLevel / MISCHIEF_MAX * 100) + 'px';
-}
-
-let floatingTexts = [];
-function showFloatingText(x, y, text) {
-  floatingTexts.push({ x, y, text, life: 60 });
+  document.getElementById('mischief-fill').style.width = (mischiefLevel / MISCHIEF_MAX * 100) + '%';
+  
+  // Update floating texts
+  for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    floatingTexts[i].y -= 0.5;
+    floatingTexts[i].life--;
+    if (floatingTexts[i].life <= 0) floatingTexts.splice(i, 1);
+  }
 }
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-  // Draw house
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      const tile = houseMap[y][x];
-      ctx.fillStyle = colors.floor;
-      ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+  const startCol = Math.floor(camera.x);
+  const startRow = Math.floor(camera.y);
+  const offsetX = (camera.x - startCol) * TILE;
+  const offsetY = (camera.y - startRow) * TILE;
+  
+  // Draw tiles
+  for (let row = 0; row <= VIEWPORT_ROWS + 1; row++) {
+    for (let col = 0; col <= VIEWPORT_COLS + 1; col++) {
+      const mapX = startCol + col;
+      const mapY = startRow + row;
       
-      if (tile === 1) {
-        ctx.fillStyle = colors.wall;
-        ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
-      } else if (tile === 3) {
-        // Mischief spot
-        const spot = mischiefSpots.find(s => s.x === x && s.y === y);
-        if (spot && !spot.used && gamePhase === 'mischief') {
-          ctx.fillStyle = colors.mischief;
+      if (mapX < 0 || mapX >= MAP_COLS || mapY < 0 || mapY >= MAP_ROWS) continue;
+      
+      const tile = houseMap[mapY][mapX];
+      const screenX = col * TILE - offsetX;
+      const screenY = row * TILE - offsetY;
+      
+      // Get room color for floor
+      let floorColor = colors[tile] || colors[T.FLOOR];
+      if (tile === T.FLOOR || tile === T.DOOR) {
+        const roomName = getCurrentRoom(mapX, mapY);
+        for (const [key, room] of Object.entries(rooms)) {
+          if (room.name === roomName) {
+            floorColor = room.color;
+            break;
+          }
+        }
+      }
+      
+      // Draw floor first
+      ctx.fillStyle = floorColor;
+      ctx.fillRect(screenX, screenY, TILE + 1, TILE + 1);
+      
+      // Draw tile details
+      if (tile === T.WALL) {
+        ctx.fillStyle = colors[T.WALL];
+        ctx.fillRect(screenX, screenY, TILE, TILE);
+        // Wall shading
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.fillRect(screenX, screenY + TILE - 4, TILE, 4);
+      } else if (tile === T.COUNTER || tile === T.TABLE || tile === T.FURNITURE) {
+        ctx.fillStyle = colors[tile];
+        ctx.fillRect(screenX + 2, screenY + 2, TILE - 4, TILE - 4);
+        ctx.fillStyle = 'rgba(0,0,0,0.15)';
+        ctx.fillRect(screenX + 2, screenY + TILE - 6, TILE - 4, 4);
+      } else if (tile === T.COUCH) {
+        ctx.fillStyle = colors[T.COUCH];
+        ctx.fillRect(screenX + 1, screenY + 1, TILE - 2, TILE - 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        ctx.fillRect(screenX + 4, screenY + 4, TILE - 8, 6);
+      } else if (tile === T.BED) {
+        ctx.fillStyle = colors[T.BED];
+        ctx.fillRect(screenX + 1, screenY + 1, TILE - 2, TILE - 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillRect(screenX + 3, screenY + 3, TILE - 12, TILE - 6);
+      } else if (tile === T.TV) {
+        ctx.fillStyle = colors[T.TV];
+        ctx.fillRect(screenX + 2, screenY + 2, TILE - 4, TILE - 4);
+        ctx.fillStyle = '#90caf9';
+        ctx.fillRect(screenX + 6, screenY + 6, TILE - 12, TILE - 14);
+      } else if (tile === T.GRASS) {
+        // Grass texture
+        ctx.fillStyle = '#8bc34a';
+        for (let i = 0; i < 3; i++) {
+          const gx = screenX + 5 + (i * 12);
+          const gy = screenY + 20 + Math.sin(mapX + mapY + i) * 5;
+          ctx.fillRect(gx, gy, 2, 8);
+        }
+      } else if (tile === T.FENCE) {
+        ctx.fillStyle = colors[T.FENCE];
+        ctx.fillRect(screenX + TILE/2 - 3, screenY, 6, TILE);
+        ctx.fillRect(screenX, screenY + 8, TILE, 4);
+        ctx.fillRect(screenX, screenY + TILE - 12, TILE, 4);
+      } else if (tile === T.TOILET) {
+        ctx.fillStyle = colors[T.TOILET];
+        ctx.beginPath();
+        ctx.ellipse(screenX + TILE/2, screenY + TILE/2, TILE/3, TILE/2.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (tile === T.TUB) {
+        ctx.fillStyle = colors[T.TUB];
+        ctx.fillRect(screenX + 2, screenY + 2, TILE - 4, TILE - 4);
+        ctx.strokeStyle = '#81d4fa';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(screenX + 2, screenY + 2, TILE - 4, TILE - 4);
+      }
+      
+      // Mischief spots
+      if (tile === T.MISCHIEF && gamePhase === 'mischief') {
+        const spot = mischiefSpots.find(s => s.x === mapX && s.y === mapY);
+        if (spot && !spot.used) {
+          ctx.fillStyle = 'rgba(255, 234, 167, 0.6)';
           ctx.beginPath();
-          ctx.arc(x * TILE + TILE/2, y * TILE + TILE/2, TILE/3, 0, Math.PI * 2);
+          ctx.arc(screenX + TILE/2, screenY + TILE/2, TILE/2.5 + Math.sin(doober.tailWag * 2) * 3, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = '#333';
-          ctx.font = '16px sans-serif';
-          ctx.fillText('❗', x * TILE + TILE/2 - 6, y * TILE + TILE/2 + 6);
+          ctx.font = '20px sans-serif';
+          ctx.fillText(spot.emoji, screenX + TILE/2 - 10, screenY + TILE/2 + 7);
         }
-      } else if (tile === 4) {
-        // Hiding spot
-        if (gamePhase === 'hide') {
-          ctx.fillStyle = colors.hiding;
-          ctx.globalAlpha = 0.5 + Math.sin(doober.tailWag * 2) * 0.2;
-          ctx.fillRect(x * TILE + 2, y * TILE + 2, TILE - 4, TILE - 4);
-          ctx.globalAlpha = 1;
-          ctx.fillStyle = '#333';
-          ctx.font = '14px sans-serif';
-          ctx.fillText('🛋️', x * TILE + TILE/2 - 8, y * TILE + TILE/2 + 5);
-        }
+      }
+      
+      // Hiding spots
+      if (tile === T.HIDING && gamePhase === 'hide') {
+        ctx.fillStyle = `rgba(162, 155, 254, ${0.4 + Math.sin(doober.tailWag * 2) * 0.2})`;
+        ctx.fillRect(screenX + 3, screenY + 3, TILE - 6, TILE - 6);
+        ctx.font = '14px sans-serif';
+        ctx.fillText('🛋️', screenX + TILE/2 - 7, screenY + TILE/2 + 5);
       }
     }
   }
   
   // Draw owners
   for (const owner of owners) {
-    const isCalm = gamePhase === 'calm' || gamePhase === 'win';
-    ctx.fillStyle = isCalm ? colors.ownerCalm : colors.owner;
+    const ox = (owner.x - camera.x) * TILE;
+    const oy = (owner.y - camera.y) * TILE;
+    
+    if (ox < -TILE || ox > canvas.width + TILE || oy < -TILE || oy > canvas.height + TILE) continue;
+    
+    // Body
+    ctx.fillStyle = owner.state === 'searching' ? '#e57373' : (owner.state === 'returning' ? '#81c784' : '#90a4ae');
     ctx.beginPath();
-    ctx.arc(owner.x * TILE + TILE/2, owner.y * TILE + TILE/2, TILE/2.5, 0, Math.PI * 2);
+    ctx.arc(ox + TILE/2, oy + TILE/2, TILE/2.2, 0, Math.PI * 2);
     ctx.fill();
     
     // Face
-    ctx.font = '20px sans-serif';
-    let emoji = '😐';
-    if (gamePhase === 'hide') emoji = '😠';
-    else if (isCalm) emoji = '😊';
-    ctx.fillText(emoji, owner.x * TILE + TILE/2 - 10, owner.y * TILE + TILE/2 + 7);
+    ctx.font = '24px sans-serif';
+    let emoji = owner.emoji;
+    if (owner.state === 'searching') emoji = '😠';
+    else if (gamePhase === 'calm') emoji = '😊';
+    ctx.fillText(emoji, ox + TILE/2 - 12, oy + TILE/2 + 8);
     
-    // Hearts when calm/won
-    if (isCalm) {
+    // Hearts when calm
+    if (gamePhase === 'calm' || gamePhase === 'win') {
       ctx.font = '16px sans-serif';
-      const heartY = owner.y * TILE - 10 + Math.sin(doober.tailWag + owner.x) * 5;
-      ctx.fillText('💕', owner.x * TILE + TILE/2 - 8, heartY);
+      const heartY = oy - 8 + Math.sin(doober.tailWag + owner.x) * 4;
+      ctx.fillText('💕', ox + TILE/2 - 8, heartY);
+    }
+    
+    // Anger indicator when searching
+    if (owner.state === 'searching') {
+      ctx.font = '12px sans-serif';
+      ctx.fillText('💢', ox + TILE - 5, oy + 5);
     }
   }
   
   // Draw Doober
+  const dooberScreenX = (doober.x - camera.x) * TILE;
+  const dooberScreenY = (doober.y - camera.y) * TILE;
+  
   if (!doober.hidden || gamePhase !== 'hide') {
-    const dx = doober.x * TILE + TILE/2;
-    const dy = doober.y * TILE + TILE/2;
+    const dx = dooberScreenX + TILE/2;
+    const dy = dooberScreenY + TILE/2;
+    
+    ctx.save();
+    if (doober.facing === -1) {
+      ctx.translate(dx, dy);
+      ctx.scale(-1, 1);
+      ctx.translate(-dx, -dy);
+    }
+    
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(dx, dy + TILE/3, TILE/2.5, TILE/6, 0, 0, Math.PI * 2);
+    ctx.fill();
     
     // Body
-    ctx.fillStyle = colors.doober;
+    ctx.fillStyle = '#d4a574';
     ctx.beginPath();
     ctx.ellipse(dx, dy, TILE/2.2, TILE/3, 0, 0, Math.PI * 2);
     ctx.fill();
     
-    // Head
+    // White chest patch
+    ctx.fillStyle = '#f5f0e6';
     ctx.beginPath();
-    ctx.arc(dx + TILE/4, dy - 2, TILE/4, 0, Math.PI * 2);
+    ctx.ellipse(dx + TILE/6, dy + 2, TILE/5, TILE/4, 0, 0, Math.PI * 2);
     ctx.fill();
     
-    // Ears
-    ctx.fillStyle = colors.dooberDark;
+    // Head
+    ctx.fillStyle = '#d4a574';
     ctx.beginPath();
-    ctx.ellipse(dx + TILE/3 - 5, dy - TILE/4, 6, 10, -0.3, 0, Math.PI * 2);
+    ctx.arc(dx + TILE/4, dy - 4, TILE/3.5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // White muzzle
+    ctx.fillStyle = '#f5f0e6';
+    ctx.beginPath();
+    ctx.ellipse(dx + TILE/3 + 2, dy - 2, TILE/6, TILE/5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Ears (floppy beagle ears!)
+    ctx.fillStyle = '#a67c52';
+    ctx.beginPath();
+    ctx.ellipse(dx + TILE/4 - 8, dy - TILE/4 + 4, 7, 14, -0.4, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.ellipse(dx + TILE/3 + 8, dy - TILE/4, 6, 10, 0.3, 0, Math.PI * 2);
+    ctx.ellipse(dx + TILE/4 + 10, dy - TILE/4 + 2, 7, 13, 0.3, 0, Math.PI * 2);
     ctx.fill();
     
     // Tail (wagging!)
-    ctx.strokeStyle = colors.doober;
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#d4a574';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    const tailWag = Math.sin(doober.tailWag) * 8;
+    const tailWag = Math.sin(doober.tailWag * 3) * 10;
     ctx.moveTo(dx - TILE/3, dy);
-    ctx.quadraticCurveTo(dx - TILE/2, dy + tailWag, dx - TILE/2 - 5, dy - 5 + tailWag);
+    ctx.quadraticCurveTo(dx - TILE/2 - 5, dy + tailWag, dx - TILE/2 - 8, dy - 8 + tailWag/2);
     ctx.stroke();
     
     // Eyes
-    ctx.fillStyle = '#333';
+    ctx.fillStyle = '#2c1810';
     ctx.beginPath();
-    ctx.arc(dx + TILE/4 - 3, dy - 5, 2, 0, Math.PI * 2);
-    ctx.arc(dx + TILE/4 + 5, dy - 5, 2, 0, Math.PI * 2);
+    ctx.arc(dx + TILE/4 - 2, dy - 8, 3, 0, Math.PI * 2);
+    ctx.arc(dx + TILE/4 + 8, dy - 8, 3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Eye shine
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(dx + TILE/4 - 1, dy - 9, 1, 0, Math.PI * 2);
+    ctx.arc(dx + TILE/4 + 9, dy - 9, 1, 0, Math.PI * 2);
     ctx.fill();
     
     // Nose
-    ctx.fillStyle = '#333';
+    ctx.fillStyle = '#2c1810';
     ctx.beginPath();
-    ctx.arc(dx + TILE/3 + 2, dy, 3, 0, Math.PI * 2);
+    ctx.ellipse(dx + TILE/3 + 6, dy - 2, 4, 3, 0, 0, Math.PI * 2);
     ctx.fill();
+    
+    ctx.restore();
   } else {
-    // Hidden indicator
-    ctx.globalAlpha = 0.4;
-    ctx.fillStyle = colors.doober;
-    const dx = doober.x * TILE + TILE/2;
-    const dy = doober.y * TILE + TILE/2;
+    // Hidden - just show hint
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = '#d4a574';
     ctx.beginPath();
-    ctx.arc(dx, dy, TILE/4, 0, Math.PI * 2);
+    ctx.arc(dooberScreenX + TILE/2, dooberScreenY + TILE/2, TILE/4, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
-    ctx.font = '12px sans-serif';
-    ctx.fillText('🤫', dx - 6, dy + 4);
+    ctx.font = '14px sans-serif';
+    ctx.fillText('🤫', dooberScreenX + TILE/2 - 7, dooberScreenY + TILE/2 + 5);
   }
   
   // Floating texts
-  for (let i = floatingTexts.length - 1; i >= 0; i--) {
-    const ft = floatingTexts[i];
-    ft.y -= 1;
-    ft.life--;
+  for (const ft of floatingTexts) {
+    const fx = (ft.x / TILE - camera.x) * TILE;
+    const fy = (ft.y / TILE - camera.y) * TILE + ft.life - 60;
     ctx.globalAlpha = ft.life / 60;
-    ctx.fillStyle = '#e74c3c';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.fillText(ft.text, ft.x, ft.y);
+    ctx.fillStyle = ft.color;
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText(ft.text, fx, fy);
     ctx.globalAlpha = 1;
-    if (ft.life <= 0) floatingTexts.splice(i, 1);
   }
+  
+  // Draw minimap
+  drawMinimap();
+}
+
+function drawMinimap() {
+  const scale = 2;
+  minimapCtx.fillStyle = '#1a1a2e';
+  minimapCtx.fillRect(0, 0, 120, 100);
+  
+  // Rooms
+  for (const [name, room] of Object.entries(rooms)) {
+    minimapCtx.fillStyle = room.color;
+    minimapCtx.globalAlpha = 0.7;
+    minimapCtx.fillRect(room.x * scale, room.y * scale, room.w * scale, room.h * scale);
+  }
+  minimapCtx.globalAlpha = 1;
+  
+  // Doober position
+  minimapCtx.fillStyle = '#f39c12';
+  minimapCtx.beginPath();
+  minimapCtx.arc(doober.x * scale, doober.y * scale, 3, 0, Math.PI * 2);
+  minimapCtx.fill();
+  
+  // Owners
+  for (const owner of owners) {
+    minimapCtx.fillStyle = owner.state === 'searching' ? '#e74c3c' : '#3498db';
+    minimapCtx.beginPath();
+    minimapCtx.arc(owner.x * scale, owner.y * scale, 2, 0, Math.PI * 2);
+    minimapCtx.fill();
+  }
+  
+  // Viewport box
+  minimapCtx.strokeStyle = '#fff';
+  minimapCtx.lineWidth = 1;
+  minimapCtx.strokeRect(camera.x * scale, camera.y * scale, VIEWPORT_COLS * scale, VIEWPORT_ROWS * scale);
 }
 
 function showMessage(text) {
@@ -502,16 +1021,19 @@ function startGame() {
   gamePhase = 'mischief';
   mischiefLevel = 0;
   angerLevel = 100;
-  doober.x = 5; doober.y = 5;
-  doober.targetX = 5; doober.targetY = 5;
+  doober.x = 8; doober.y = 17;
+  doober.targetX = 8; doober.targetY = 17;
   doober.hidden = false;
   mischiefSpots.forEach(s => s.used = false);
-  owners[0].x = 6; owners[0].y = 3; owners[0].dir = 1;
-  owners[1].x = 5; owners[1].y = 6; owners[1].dir = 1;
+  
+  owners[0].x = owners[0].homeX; owners[0].y = owners[0].homeY;
+  owners[0].state = 'idle'; owners[0].searchPath = [];
+  owners[1].x = owners[1].homeX; owners[1].y = owners[1].homeY;
+  owners[1].state = 'idle'; owners[1].searchPath = [];
+  
   document.getElementById('mischief-meter').style.display = 'block';
   document.getElementById('anger-meter').style.display = 'none';
   document.getElementById('message').style.display = 'none';
-  document.getElementById('phase-indicator').textContent = '🐕 Cause mischief!';
   floatingTexts = [];
 }
 
