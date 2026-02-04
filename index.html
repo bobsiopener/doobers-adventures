@@ -6,6 +6,11 @@
   <title>Doober's Adventures</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
     body {
       background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
       display: flex;
@@ -15,14 +20,15 @@
       min-height: 100vh;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       touch-action: none;
-      overflow: hidden;
     }
     #game-container {
       position: relative;
-      border-radius: 16px;
+      border-radius: 12px;
       overflow: hidden;
       box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 60px rgba(255,200,100,0.1);
       border: 3px solid #3a2a1a;
+      max-width: 100vw;
+      max-height: 90vh;
     }
     canvas { display: block; }
     #ui {
@@ -134,9 +140,9 @@
     }
     #instructions {
       color: #a0a0a0;
-      margin-top: 16px;
+      margin-top: 12px;
       text-align: center;
-      font-size: 13px;
+      font-size: 12px;
     }
   </style>
 </head>
@@ -165,7 +171,7 @@
 
 <script>
 // ============================================
-// DOOBER'S ADVENTURES - Full House Edition
+// DOOBER'S ADVENTURES - Full House Edition v2
 // ============================================
 
 const canvas = document.getElementById('game');
@@ -173,12 +179,34 @@ const ctx = canvas.getContext('2d');
 const minimapCanvas = document.getElementById('minimap');
 const minimapCtx = minimapCanvas.getContext('2d');
 
-// Display settings
-const TILE = 40;
-const VIEWPORT_COLS = 16;
-const VIEWPORT_ROWS = 12;
-canvas.width = VIEWPORT_COLS * TILE;
-canvas.height = VIEWPORT_ROWS * TILE;
+// Responsive sizing - fill browser width, maintain 16:9 aspect ratio
+const TILE = 32;
+const ASPECT_RATIO = 16 / 9;
+
+function resizeCanvas() {
+  const maxWidth = window.innerWidth - 20;
+  const maxHeight = window.innerHeight * 0.85;
+  
+  let width = maxWidth;
+  let height = width / ASPECT_RATIO;
+  
+  if (height > maxHeight) {
+    height = maxHeight;
+    width = height * ASPECT_RATIO;
+  }
+  
+  canvas.width = Math.floor(width);
+  canvas.height = Math.floor(height);
+  
+  // Update viewport tiles
+  VIEWPORT_COLS = Math.ceil(canvas.width / TILE);
+  VIEWPORT_ROWS = Math.ceil(canvas.height / TILE);
+}
+
+let VIEWPORT_COLS = 20;
+let VIEWPORT_ROWS = 12;
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
 
 // Map dimensions (60x50 = 3000 tiles)
 const MAP_COLS = 60;
@@ -215,17 +243,17 @@ const T = {
   FENCE: 15,
 };
 
-// Room definitions
+// Room definitions (adjusted for 1-tile walls)
 const rooms = {
-  kitchen:    { x: 2,  y: 22, w: 16, h: 14, name: 'Kitchen', color: '#f5e6d3' },
-  dining:     { x: 20, y: 22, w: 14, h: 12, name: 'Dining Room', color: '#f0e0c8' },
-  living:     { x: 36, y: 18, w: 22, h: 18, name: 'Living Room', color: '#e8dcc8' },
-  entry:      { x: 2,  y: 38, w: 12, h: 10, name: 'Entry', color: '#d8cbb8' },
-  backyard:   { x: 20, y: 38, w: 38, h: 10, name: 'Backyard', color: '#90c970' },
-  bathroom:   { x: 2,  y: 6,  w: 10, h: 8,  name: 'Bathroom', color: '#d0e8f0' },
-  bedroom:    { x: 14, y: 4,  w: 16, h: 14, name: 'Bedroom', color: '#e8d8c8' },
-  kidsroom:   { x: 32, y: 4,  w: 14, h: 12, name: "Kid's Room", color: '#f8e8d0' },
-  hallway:    { x: 2,  y: 16, w: 56, h: 4,  name: 'Hallway', color: '#d0c4b0' },
+  kitchen:    { x: 1,  y: 21, w: 16, h: 14, name: 'Kitchen', color: '#f5e6d3' },
+  dining:     { x: 18, y: 21, w: 14, h: 14, name: 'Dining Room', color: '#f0e0c8' },
+  living:     { x: 33, y: 17, w: 26, h: 18, name: 'Living Room', color: '#e8dcc8' },
+  entry:      { x: 1,  y: 36, w: 12, h: 12, name: 'Entry', color: '#d8cbb8' },
+  backyard:   { x: 14, y: 36, w: 45, h: 13, name: 'Backyard', color: '#90c970' },
+  bathroom:   { x: 1,  y: 5,  w: 10, h: 10, name: 'Bathroom', color: '#d0e8f0' },
+  bedroom:    { x: 12, y: 3,  w: 18, h: 12, name: 'Bedroom', color: '#e8d8c8' },
+  kidsroom:   { x: 31, y: 3,  w: 16, h: 12, name: "Kid's Room", color: '#f8e8d0' },
+  hallway:    { x: 1,  y: 16, w: 58, h: 4,  name: 'Hallway', color: '#d0c4b0' },
 };
 
 // Generate the map
@@ -272,84 +300,84 @@ Object.values(rooms).forEach(r => {
   fillRoom(r, r.name === 'Backyard' ? T.GRASS : T.FLOOR);
 });
 
-// Add doors/connections
-function addDoor(x, y, vertical = false) {
-  if (vertical) {
-    placeTile(x, y, T.DOOR, false);
-    placeTile(x, y+1, T.DOOR, false);
-  } else {
-    placeTile(x, y, T.DOOR, false);
-    placeTile(x+1, y, T.DOOR, false);
+// Add doors (2+ tiles wide)
+function addDoor(x, y, width = 2, vertical = true) {
+  for (let i = 0; i < width; i++) {
+    if (vertical) {
+      placeTile(x + i, y, T.DOOR, false);
+    } else {
+      placeTile(x, y + i, T.DOOR, false);
+    }
   }
 }
 
-// Hallway to rooms doors
-addDoor(8, 20, true);   // kitchen to hallway
-addDoor(26, 20, true);  // dining to hallway
-addDoor(45, 18, true);  // living to hallway
-addDoor(8, 14, true);   // bathroom to hallway
-addDoor(22, 18, true);  // bedroom to hallway
-addDoor(38, 16, true);  // kids room to hallway
-addDoor(8, 38, true);   // entry to kitchen
-addDoor(20, 42, false); // entry to backyard
-addDoor(36, 36, true);  // living to backyard
+// Hallway to rooms doors (2 tiles wide each)
+addDoor(6, 20, 3, true);    // kitchen to hallway
+addDoor(22, 20, 3, true);   // dining to hallway
+addDoor(40, 16, 3, true);   // living to hallway
+addDoor(4, 15, 2, true);    // bathroom to hallway
+addDoor(18, 15, 3, true);   // bedroom to hallway
+addDoor(38, 15, 3, true);   // kids room to hallway
+addDoor(6, 35, 3, true);    // entry to kitchen
+addDoor(14, 40, 2, false);  // entry to backyard (horizontal)
+addDoor(33, 35, 3, true);   // living to backyard
 
 // Kitchen furniture
-placeRect(3, 23, 14, 2, T.COUNTER, true);  // top counter
-placeRect(3, 25, 2, 8, T.COUNTER, true);   // left counter
-placeRect(15, 25, 2, 6, T.COUNTER, true);  // right counter
+placeRect(2, 22, 14, 2, T.COUNTER, true);   // top counter
+placeRect(2, 24, 2, 8, T.COUNTER, true);    // left counter
+placeRect(14, 24, 2, 6, T.COUNTER, true);   // right counter
 
 // Dining room furniture
-placeRect(23, 26, 4, 3, T.TABLE, true);    // dining table
+placeRect(21, 25, 5, 4, T.TABLE, true);     // dining table
 
 // Living room furniture
-placeRect(38, 20, 6, 3, T.COUCH, true);    // couch
-placeRect(50, 19, 3, 4, T.TV, true);       // TV
+placeRect(36, 19, 8, 3, T.COUCH, true);     // couch
+placeRect(52, 18, 4, 5, T.TV, true);        // TV
 
 // Bedroom furniture
-placeRect(16, 6, 4, 3, T.BED, true);       // bed
-placeRect(26, 6, 2, 3, T.FURNITURE, true); // dresser
+placeRect(14, 5, 5, 4, T.BED, true);        // bed
+placeRect(26, 5, 3, 4, T.FURNITURE, true);  // dresser
 
 // Kid's room furniture
-placeRect(34, 6, 3, 2, T.BED, true);       // kid bed
-placeRect(42, 6, 2, 2, T.FURNITURE, true); // toy chest
+placeRect(33, 5, 4, 3, T.BED, true);        // kid bed
+placeRect(43, 5, 3, 3, T.FURNITURE, true);  // toy chest
 
 // Bathroom furniture
-placeTile(4, 8, T.TOILET, true);
-placeRect(8, 8, 3, 2, T.TUB, true);
+placeTile(3, 8, T.TOILET, true);
+placeRect(7, 7, 3, 3, T.TUB, true);
 
 // Backyard
-placeRect(20, 38, 38, 1, T.FENCE, true);   // top fence
-placeRect(20, 47, 38, 1, T.FENCE, true);   // bottom fence
-placeRect(20, 38, 1, 10, T.FENCE, true);   // left fence
-placeRect(57, 38, 1, 10, T.FENCE, true);   // right fence
+placeRect(14, 36, 45, 1, T.FENCE, true);    // top fence
+placeRect(14, 48, 45, 1, T.FENCE, true);    // bottom fence
+placeRect(14, 36, 1, 13, T.FENCE, true);    // left fence
+placeRect(58, 36, 1, 13, T.FENCE, true);    // right fence
 
 // Mischief spots
 const mischiefSpots = [
   // Kitchen
-  { x: 5, y: 32, name: 'Trash Can', room: 'kitchen', points: 15, used: false, emoji: '🗑️' },
-  { x: 14, y: 28, name: 'Counter Food', room: 'kitchen', points: 20, used: false, emoji: '🍖' },
+  { x: 4, y: 30, name: 'Trash Can', room: 'kitchen', points: 15, used: false, emoji: '🗑️' },
+  { x: 12, y: 26, name: 'Counter Food', room: 'kitchen', points: 20, used: false, emoji: '🍖' },
   // Dining
-  { x: 24, y: 27, name: 'TURKEY!', room: 'dining', points: 35, used: false, emoji: '🦃' },
+  { x: 23, y: 27, name: 'TURKEY!', room: 'dining', points: 35, used: false, emoji: '🦃' },
   // Living
-  { x: 48, y: 30, name: 'Dad\'s Shoes', room: 'living', points: 15, used: false, emoji: '👟' },
-  { x: 40, y: 22, name: 'Couch Cushions', room: 'living', points: 20, used: false, emoji: '🛋️' },
-  { x: 55, y: 25, name: 'Potted Plant', room: 'living', points: 15, used: false, emoji: '🪴' },
+  { x: 50, y: 28, name: 'Dad\'s Shoes', room: 'living', points: 15, used: false, emoji: '👟' },
+  { x: 38, y: 22, name: 'Couch Cushions', room: 'living', points: 20, used: false, emoji: '🛋️' },
+  { x: 56, y: 24, name: 'Potted Plant', room: 'living', points: 15, used: false, emoji: '🪴' },
   // Entry
-  { x: 5, y: 42, name: 'Shoe Rack', room: 'entry', points: 15, used: false, emoji: '👞' },
+  { x: 4, y: 42, name: 'Shoe Rack', room: 'entry', points: 15, used: false, emoji: '👞' },
   // Bathroom
-  { x: 4, y: 9, name: 'Toilet Water', room: 'bathroom', points: 10, used: false, emoji: '🚽' },
-  { x: 6, y: 11, name: 'Toilet Paper', room: 'bathroom', points: 15, used: false, emoji: '🧻' },
+  { x: 3, y: 9, name: 'Toilet Water', room: 'bathroom', points: 10, used: false, emoji: '🚽' },
+  { x: 5, y: 11, name: 'Toilet Paper', room: 'bathroom', points: 15, used: false, emoji: '🧻' },
   // Bedroom
-  { x: 18, y: 10, name: 'Pillows', room: 'bedroom', points: 15, used: false, emoji: '🛏️' },
+  { x: 16, y: 10, name: 'Pillows', room: 'bedroom', points: 15, used: false, emoji: '🛏️' },
   { x: 27, y: 8, name: 'Laundry', room: 'bedroom', points: 20, used: false, emoji: '🧦' },
   // Kid's room
-  { x: 38, y: 10, name: 'Chew Toys', room: 'kidsroom', points: 15, used: false, emoji: '🧸' },
+  { x: 36, y: 10, name: 'Chew Toys', room: 'kidsroom', points: 15, used: false, emoji: '🧸' },
   { x: 44, y: 12, name: 'Homework', room: 'kidsroom', points: 25, used: false, emoji: '📝' },
   // Backyard
-  { x: 30, y: 42, name: 'Dig Garden', room: 'backyard', points: 20, used: false, emoji: '🌷' },
-  { x: 45, y: 44, name: 'Dig Lawn', room: 'backyard', points: 15, used: false, emoji: '🕳️' },
-  { x: 52, y: 41, name: 'Chase Bird', room: 'backyard', points: 10, used: false, emoji: '🐦' },
+  { x: 25, y: 42, name: 'Dig Garden', room: 'backyard', points: 20, used: false, emoji: '🌷' },
+  { x: 40, y: 44, name: 'Dig Lawn', room: 'backyard', points: 15, used: false, emoji: '🕳️' },
+  { x: 52, y: 40, name: 'Chase Bird', room: 'backyard', points: 10, used: false, emoji: '🐦' },
 ];
 
 // Mark mischief spots on map
@@ -359,18 +387,18 @@ mischiefSpots.forEach(spot => {
 
 // Hiding spots
 const hidingSpots = [
-  { x: 10, y: 30, name: 'Behind Counter', room: 'kitchen' },
+  { x: 8, y: 28, name: 'Behind Counter', room: 'kitchen' },
   { x: 24, y: 30, name: 'Under Table', room: 'dining' },
   { x: 42, y: 24, name: 'Behind Couch', room: 'living' },
-  { x: 56, y: 32, name: 'Behind Curtains', room: 'living' },
-  { x: 10, y: 44, name: 'Coat Closet', room: 'entry' },
-  { x: 10, y: 10, name: 'Shower Curtain', room: 'bathroom' },
-  { x: 16, y: 12, name: 'Under Bed', room: 'bedroom' },
-  { x: 28, y: 14, name: 'In Closet', room: 'bedroom' },
-  { x: 34, y: 10, name: 'Under Kid Bed', room: 'kidsroom' },
-  { x: 43, y: 8, name: 'Toy Chest', room: 'kidsroom' },
-  { x: 25, y: 45, name: 'Doghouse', room: 'backyard' },
-  { x: 50, y: 43, name: 'Bushes', room: 'backyard' },
+  { x: 55, y: 30, name: 'Behind Curtains', room: 'living' },
+  { x: 8, y: 44, name: 'Coat Closet', room: 'entry' },
+  { x: 8, y: 10, name: 'Shower Curtain', room: 'bathroom' },
+  { x: 14, y: 10, name: 'Under Bed', room: 'bedroom' },
+  { x: 28, y: 12, name: 'In Closet', room: 'bedroom' },
+  { x: 33, y: 10, name: 'Under Kid Bed', room: 'kidsroom' },
+  { x: 44, y: 8, name: 'Toy Chest', room: 'kidsroom' },
+  { x: 20, y: 44, name: 'Doghouse', room: 'backyard' },
+  { x: 48, y: 42, name: 'Bushes', room: 'backyard' },
 ];
 
 // Mark hiding spots
@@ -378,34 +406,38 @@ hidingSpots.forEach(spot => {
   placeTile(spot.x, spot.y, T.HIDING, false);
 });
 
-// Doober
+// Doober - improved movement (high initial speed, lower top speed, snappy)
 const doober = {
   x: 8, y: 17,
   targetX: 8, targetY: 17,
-  speed: 0.12,
+  velX: 0, velY: 0,
+  maxSpeed: 0.18,       // Lower top speed for control
+  accel: 0.9,           // Very high acceleration (reach top speed almost instantly)
+  friction: 0.85,       // Friction when no input
   hidden: false,
   tailWag: 0,
-  facing: 1, // 1=right, -1=left
+  facing: 1,
+  moving: false,
 };
 
 // Owners
 const owners = [
   {
     name: 'Mom',
-    x: 10, y: 28,
-    homeX: 10, homeY: 28,
-    targetX: 10, targetY: 28,
+    x: 8, y: 26,
+    homeX: 8, homeY: 26,
+    targetX: 8, targetY: 26,
     speed: 0.04,
-    state: 'idle', // idle, searching, returning
+    state: 'idle',
     emoji: '👩',
     searchPath: [],
     pathIndex: 0,
   },
   {
     name: 'Dad',
-    x: 40, y: 24,
-    homeX: 40, homeY: 24,
-    targetX: 40, targetY: 24,
+    x: 40, y: 22,
+    homeX: 40, homeY: 22,
+    targetX: 40, targetY: 22,
     speed: 0.035,
     state: 'idle',
     emoji: '👨',
@@ -474,7 +506,7 @@ function findPath(startX, startY, endX, endY) {
       }
     }
     
-    if (openSet.length > 500) break; // Safety limit
+    if (openSet.length > 500) break;
   }
   
   return [];
@@ -500,24 +532,26 @@ const colors = {
   [T.FENCE]: '#6d4c41',
 };
 
-// Input
+// Input - track held keys for smooth movement
+const keys = { up: false, down: false, left: false, right: false };
+
 document.addEventListener('keydown', (e) => {
   if (gamePhase === 'win' || gamePhase === 'lose') return;
   
-  let newX = Math.round(doober.targetX);
-  let newY = Math.round(doober.targetY);
-  
-  if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') newY--;
-  else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') newY++;
-  else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { newX--; doober.facing = -1; }
-  else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { newX++; doober.facing = 1; }
+  if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') keys.up = true;
+  else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.down = true;
+  else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
+  else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
   else return;
   
   e.preventDefault();
-  if (newX >= 0 && newX < MAP_COLS && newY >= 0 && newY < MAP_ROWS && collisionMap[newY][newX] === 0) {
-    doober.targetX = newX;
-    doober.targetY = newY;
-  }
+});
+
+document.addEventListener('keyup', (e) => {
+  if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') keys.up = false;
+  else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.down = false;
+  else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
+  else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
 });
 
 function distance(a, b) {
@@ -540,26 +574,15 @@ function showFloatingText(x, y, text, color = '#e74c3c') {
 }
 
 function updateOwner(owner) {
-  if (owner.state === 'idle') {
-    // Stay at home position during mischief phase
-    return;
-  }
+  if (owner.state === 'idle') return;
   
   if (owner.state === 'searching') {
-    // Follow path or generate new one
     if (owner.searchPath.length === 0 || owner.pathIndex >= owner.searchPath.length) {
-      // Generate search pattern - try to find Doober or patrol
       const searchPoints = [
-        { x: 8, y: 17 },   // hallway
-        { x: 30, y: 17 },  // hallway mid
-        { x: 45, y: 17 },  // hallway right
-        { x: 10, y: 30 },  // kitchen
-        { x: 24, y: 28 },  // dining
-        { x: 45, y: 28 },  // living
-        { x: 8, y: 42 },   // entry
-        { x: 8, y: 10 },   // bathroom
-        { x: 22, y: 10 },  // bedroom
-        { x: 40, y: 10 },  // kidsroom
+        { x: 8, y: 17 },  { x: 30, y: 17 }, { x: 50, y: 17 },
+        { x: 8, y: 28 },  { x: 24, y: 28 }, { x: 45, y: 25 },
+        { x: 6, y: 42 },  { x: 6, y: 10 },  { x: 20, y: 8 },
+        { x: 38, y: 8 },  { x: 30, y: 42 },
       ];
       const target = searchPoints[Math.floor(Math.random() * searchPoints.length)];
       owner.searchPath = findPath(owner.x, owner.y, target.x, target.y);
@@ -611,19 +634,64 @@ function updateOwner(owner) {
   }
 }
 
+function canMoveTo(x, y) {
+  const checkX = Math.round(x);
+  const checkY = Math.round(y);
+  if (checkX < 0 || checkX >= MAP_COLS || checkY < 0 || checkY >= MAP_ROWS) return false;
+  return collisionMap[checkY][checkX] === 0;
+}
+
 function update() {
-  // Move Doober
-  const dx = doober.targetX - doober.x;
-  const dy = doober.targetY - doober.y;
-  if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05) {
-    doober.x += dx * doober.speed;
-    doober.y += dy * doober.speed;
+  // Handle input - apply velocity based on held keys
+  let inputX = 0, inputY = 0;
+  if (keys.up) inputY = -1;
+  if (keys.down) inputY = 1;
+  if (keys.left) { inputX = -1; doober.facing = -1; }
+  if (keys.right) { inputX = 1; doober.facing = 1; }
+  
+  doober.moving = inputX !== 0 || inputY !== 0;
+  
+  // Apply acceleration (very fast to reach top speed)
+  if (inputX !== 0) {
+    doober.velX += inputX * doober.accel * doober.maxSpeed;
   } else {
-    doober.x = doober.targetX;
-    doober.y = doober.targetY;
+    doober.velX *= doober.friction;
   }
   
-  doober.tailWag += 0.15;
+  if (inputY !== 0) {
+    doober.velY += inputY * doober.accel * doober.maxSpeed;
+  } else {
+    doober.velY *= doober.friction;
+  }
+  
+  // Clamp to max speed
+  const speed = Math.sqrt(doober.velX ** 2 + doober.velY ** 2);
+  if (speed > doober.maxSpeed) {
+    doober.velX = (doober.velX / speed) * doober.maxSpeed;
+    doober.velY = (doober.velY / speed) * doober.maxSpeed;
+  }
+  
+  // Stop if very slow
+  if (Math.abs(doober.velX) < 0.01) doober.velX = 0;
+  if (Math.abs(doober.velY) < 0.01) doober.velY = 0;
+  
+  // Move with collision
+  const newX = doober.x + doober.velX;
+  const newY = doober.y + doober.velY;
+  
+  if (canMoveTo(newX, doober.y)) {
+    doober.x = newX;
+  } else {
+    doober.velX = 0;
+  }
+  
+  if (canMoveTo(doober.x, newY)) {
+    doober.y = newY;
+  } else {
+    doober.velY = 0;
+  }
+  
+  doober.tailWag += doober.moving ? 0.25 : 0.1;
   
   // Update current room
   const room = getCurrentRoom(doober.x, doober.y);
@@ -654,7 +722,6 @@ function update() {
   if (gamePhase === 'mischief') {
     document.getElementById('phase-indicator').textContent = '🐕 Cause mischief!';
     
-    // Check mischief spots
     for (const spot of mischiefSpots) {
       if (!spot.used && distance(doober, spot) < 1.2) {
         spot.used = true;
@@ -713,7 +780,6 @@ function update() {
   
   document.getElementById('mischief-fill').style.width = (mischiefLevel / MISCHIEF_MAX * 100) + '%';
   
-  // Update floating texts
   for (let i = floatingTexts.length - 1; i >= 0; i--) {
     floatingTexts[i].y -= 0.5;
     floatingTexts[i].life--;
@@ -741,7 +807,6 @@ function draw() {
       const screenX = col * TILE - offsetX;
       const screenY = row * TILE - offsetY;
       
-      // Get room color for floor
       let floorColor = colors[tile] || colors[T.FLOOR];
       if (tile === T.FLOOR || tile === T.DOOR) {
         const roomName = getCurrentRoom(mapX, mapY);
@@ -753,50 +818,46 @@ function draw() {
         }
       }
       
-      // Draw floor first
       ctx.fillStyle = floorColor;
       ctx.fillRect(screenX, screenY, TILE + 1, TILE + 1);
       
-      // Draw tile details
       if (tile === T.WALL) {
         ctx.fillStyle = colors[T.WALL];
         ctx.fillRect(screenX, screenY, TILE, TILE);
-        // Wall shading
         ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        ctx.fillRect(screenX, screenY + TILE - 4, TILE, 4);
+        ctx.fillRect(screenX, screenY + TILE - 3, TILE, 3);
       } else if (tile === T.COUNTER || tile === T.TABLE || tile === T.FURNITURE) {
         ctx.fillStyle = colors[tile];
         ctx.fillRect(screenX + 2, screenY + 2, TILE - 4, TILE - 4);
         ctx.fillStyle = 'rgba(0,0,0,0.15)';
-        ctx.fillRect(screenX + 2, screenY + TILE - 6, TILE - 4, 4);
+        ctx.fillRect(screenX + 2, screenY + TILE - 5, TILE - 4, 3);
       } else if (tile === T.COUCH) {
         ctx.fillStyle = colors[T.COUCH];
         ctx.fillRect(screenX + 1, screenY + 1, TILE - 2, TILE - 2);
         ctx.fillStyle = 'rgba(255,255,255,0.2)';
-        ctx.fillRect(screenX + 4, screenY + 4, TILE - 8, 6);
+        ctx.fillRect(screenX + 4, screenY + 4, TILE - 8, 5);
       } else if (tile === T.BED) {
         ctx.fillStyle = colors[T.BED];
         ctx.fillRect(screenX + 1, screenY + 1, TILE - 2, TILE - 2);
         ctx.fillStyle = 'rgba(255,255,255,0.3)';
-        ctx.fillRect(screenX + 3, screenY + 3, TILE - 12, TILE - 6);
+        ctx.fillRect(screenX + 3, screenY + 3, TILE - 10, TILE - 6);
       } else if (tile === T.TV) {
         ctx.fillStyle = colors[T.TV];
         ctx.fillRect(screenX + 2, screenY + 2, TILE - 4, TILE - 4);
         ctx.fillStyle = '#90caf9';
-        ctx.fillRect(screenX + 6, screenY + 6, TILE - 12, TILE - 14);
+        ctx.fillRect(screenX + 5, screenY + 5, TILE - 10, TILE - 12);
       } else if (tile === T.GRASS) {
-        // Grass texture
         ctx.fillStyle = '#8bc34a';
         for (let i = 0; i < 3; i++) {
-          const gx = screenX + 5 + (i * 12);
-          const gy = screenY + 20 + Math.sin(mapX + mapY + i) * 5;
-          ctx.fillRect(gx, gy, 2, 8);
+          const gx = screenX + 4 + (i * 10);
+          const gy = screenY + 16 + Math.sin(mapX + mapY + i) * 4;
+          ctx.fillRect(gx, gy, 2, 6);
         }
       } else if (tile === T.FENCE) {
         ctx.fillStyle = colors[T.FENCE];
-        ctx.fillRect(screenX + TILE/2 - 3, screenY, 6, TILE);
-        ctx.fillRect(screenX, screenY + 8, TILE, 4);
-        ctx.fillRect(screenX, screenY + TILE - 12, TILE, 4);
+        ctx.fillRect(screenX + TILE/2 - 2, screenY, 4, TILE);
+        ctx.fillRect(screenX, screenY + 6, TILE, 3);
+        ctx.fillRect(screenX, screenY + TILE - 9, TILE, 3);
       } else if (tile === T.TOILET) {
         ctx.fillStyle = colors[T.TOILET];
         ctx.beginPath();
@@ -810,25 +871,23 @@ function draw() {
         ctx.strokeRect(screenX + 2, screenY + 2, TILE - 4, TILE - 4);
       }
       
-      // Mischief spots
       if (tile === T.MISCHIEF && gamePhase === 'mischief') {
         const spot = mischiefSpots.find(s => s.x === mapX && s.y === mapY);
         if (spot && !spot.used) {
           ctx.fillStyle = 'rgba(255, 234, 167, 0.6)';
           ctx.beginPath();
-          ctx.arc(screenX + TILE/2, screenY + TILE/2, TILE/2.5 + Math.sin(doober.tailWag * 2) * 3, 0, Math.PI * 2);
+          ctx.arc(screenX + TILE/2, screenY + TILE/2, TILE/2.5 + Math.sin(doober.tailWag * 2) * 2, 0, Math.PI * 2);
           ctx.fill();
-          ctx.font = '20px sans-serif';
-          ctx.fillText(spot.emoji, screenX + TILE/2 - 10, screenY + TILE/2 + 7);
+          ctx.font = '16px sans-serif';
+          ctx.fillText(spot.emoji, screenX + TILE/2 - 8, screenY + TILE/2 + 6);
         }
       }
       
-      // Hiding spots
       if (tile === T.HIDING && gamePhase === 'hide') {
         ctx.fillStyle = `rgba(162, 155, 254, ${0.4 + Math.sin(doober.tailWag * 2) * 0.2})`;
-        ctx.fillRect(screenX + 3, screenY + 3, TILE - 6, TILE - 6);
-        ctx.font = '14px sans-serif';
-        ctx.fillText('🛋️', screenX + TILE/2 - 7, screenY + TILE/2 + 5);
+        ctx.fillRect(screenX + 2, screenY + 2, TILE - 4, TILE - 4);
+        ctx.font = '12px sans-serif';
+        ctx.fillText('🛋️', screenX + TILE/2 - 6, screenY + TILE/2 + 4);
       }
     }
   }
@@ -840,30 +899,26 @@ function draw() {
     
     if (ox < -TILE || ox > canvas.width + TILE || oy < -TILE || oy > canvas.height + TILE) continue;
     
-    // Body
     ctx.fillStyle = owner.state === 'searching' ? '#e57373' : (owner.state === 'returning' ? '#81c784' : '#90a4ae');
     ctx.beginPath();
     ctx.arc(ox + TILE/2, oy + TILE/2, TILE/2.2, 0, Math.PI * 2);
     ctx.fill();
     
-    // Face
-    ctx.font = '24px sans-serif';
+    ctx.font = '20px sans-serif';
     let emoji = owner.emoji;
     if (owner.state === 'searching') emoji = '😠';
     else if (gamePhase === 'calm') emoji = '😊';
-    ctx.fillText(emoji, ox + TILE/2 - 12, oy + TILE/2 + 8);
+    ctx.fillText(emoji, ox + TILE/2 - 10, oy + TILE/2 + 7);
     
-    // Hearts when calm
     if (gamePhase === 'calm' || gamePhase === 'win') {
-      ctx.font = '16px sans-serif';
-      const heartY = oy - 8 + Math.sin(doober.tailWag + owner.x) * 4;
-      ctx.fillText('💕', ox + TILE/2 - 8, heartY);
+      ctx.font = '14px sans-serif';
+      const heartY = oy - 6 + Math.sin(doober.tailWag + owner.x) * 3;
+      ctx.fillText('💕', ox + TILE/2 - 7, heartY);
     }
     
-    // Anger indicator when searching
     if (owner.state === 'searching') {
-      ctx.font = '12px sans-serif';
-      ctx.fillText('💢', ox + TILE - 5, oy + 5);
+      ctx.font = '10px sans-serif';
+      ctx.fillText('💢', ox + TILE - 4, oy + 4);
     }
   }
   
@@ -882,100 +937,87 @@ function draw() {
       ctx.translate(-dx, -dy);
     }
     
-    // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.2)';
     ctx.beginPath();
     ctx.ellipse(dx, dy + TILE/3, TILE/2.5, TILE/6, 0, 0, Math.PI * 2);
     ctx.fill();
     
-    // Body
     ctx.fillStyle = '#d4a574';
     ctx.beginPath();
     ctx.ellipse(dx, dy, TILE/2.2, TILE/3, 0, 0, Math.PI * 2);
     ctx.fill();
     
-    // White chest patch
     ctx.fillStyle = '#f5f0e6';
     ctx.beginPath();
     ctx.ellipse(dx + TILE/6, dy + 2, TILE/5, TILE/4, 0, 0, Math.PI * 2);
     ctx.fill();
     
-    // Head
     ctx.fillStyle = '#d4a574';
     ctx.beginPath();
-    ctx.arc(dx + TILE/4, dy - 4, TILE/3.5, 0, Math.PI * 2);
+    ctx.arc(dx + TILE/4, dy - 3, TILE/3.5, 0, Math.PI * 2);
     ctx.fill();
     
-    // White muzzle
     ctx.fillStyle = '#f5f0e6';
     ctx.beginPath();
-    ctx.ellipse(dx + TILE/3 + 2, dy - 2, TILE/6, TILE/5, 0, 0, Math.PI * 2);
+    ctx.ellipse(dx + TILE/3 + 2, dy - 1, TILE/6, TILE/5, 0, 0, Math.PI * 2);
     ctx.fill();
     
-    // Ears (floppy beagle ears!)
     ctx.fillStyle = '#a67c52';
     ctx.beginPath();
-    ctx.ellipse(dx + TILE/4 - 8, dy - TILE/4 + 4, 7, 14, -0.4, 0, Math.PI * 2);
+    ctx.ellipse(dx + TILE/4 - 6, dy - TILE/4 + 3, 5, 11, -0.4, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.ellipse(dx + TILE/4 + 10, dy - TILE/4 + 2, 7, 13, 0.3, 0, Math.PI * 2);
+    ctx.ellipse(dx + TILE/4 + 8, dy - TILE/4 + 2, 5, 10, 0.3, 0, Math.PI * 2);
     ctx.fill();
     
-    // Tail (wagging!)
     ctx.strokeStyle = '#d4a574';
-    ctx.lineWidth = 5;
+    ctx.lineWidth = 4;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    const tailWag = Math.sin(doober.tailWag * 3) * 10;
+    const tailWag = Math.sin(doober.tailWag * 3) * 8;
     ctx.moveTo(dx - TILE/3, dy);
-    ctx.quadraticCurveTo(dx - TILE/2 - 5, dy + tailWag, dx - TILE/2 - 8, dy - 8 + tailWag/2);
+    ctx.quadraticCurveTo(dx - TILE/2 - 4, dy + tailWag, dx - TILE/2 - 6, dy - 6 + tailWag/2);
     ctx.stroke();
     
-    // Eyes
     ctx.fillStyle = '#2c1810';
     ctx.beginPath();
-    ctx.arc(dx + TILE/4 - 2, dy - 8, 3, 0, Math.PI * 2);
-    ctx.arc(dx + TILE/4 + 8, dy - 8, 3, 0, Math.PI * 2);
+    ctx.arc(dx + TILE/4 - 2, dy - 6, 2.5, 0, Math.PI * 2);
+    ctx.arc(dx + TILE/4 + 6, dy - 6, 2.5, 0, Math.PI * 2);
     ctx.fill();
     
-    // Eye shine
     ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.arc(dx + TILE/4 - 1, dy - 9, 1, 0, Math.PI * 2);
-    ctx.arc(dx + TILE/4 + 9, dy - 9, 1, 0, Math.PI * 2);
+    ctx.arc(dx + TILE/4 - 1, dy - 7, 1, 0, Math.PI * 2);
+    ctx.arc(dx + TILE/4 + 7, dy - 7, 1, 0, Math.PI * 2);
     ctx.fill();
     
-    // Nose
     ctx.fillStyle = '#2c1810';
     ctx.beginPath();
-    ctx.ellipse(dx + TILE/3 + 6, dy - 2, 4, 3, 0, 0, Math.PI * 2);
+    ctx.ellipse(dx + TILE/3 + 5, dy - 1, 3, 2.5, 0, 0, Math.PI * 2);
     ctx.fill();
     
     ctx.restore();
   } else {
-    // Hidden - just show hint
     ctx.globalAlpha = 0.35;
     ctx.fillStyle = '#d4a574';
     ctx.beginPath();
     ctx.arc(dooberScreenX + TILE/2, dooberScreenY + TILE/2, TILE/4, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
-    ctx.font = '14px sans-serif';
-    ctx.fillText('🤫', dooberScreenX + TILE/2 - 7, dooberScreenY + TILE/2 + 5);
+    ctx.font = '12px sans-serif';
+    ctx.fillText('🤫', dooberScreenX + TILE/2 - 6, dooberScreenY + TILE/2 + 4);
   }
   
-  // Floating texts
   for (const ft of floatingTexts) {
     const fx = (ft.x / TILE - camera.x) * TILE;
     const fy = (ft.y / TILE - camera.y) * TILE + ft.life - 60;
     ctx.globalAlpha = ft.life / 60;
     ctx.fillStyle = ft.color;
-    ctx.font = 'bold 16px sans-serif';
+    ctx.font = 'bold 14px sans-serif';
     ctx.fillText(ft.text, fx, fy);
     ctx.globalAlpha = 1;
   }
   
-  // Draw minimap
   drawMinimap();
 }
 
@@ -984,7 +1026,6 @@ function drawMinimap() {
   minimapCtx.fillStyle = '#1a1a2e';
   minimapCtx.fillRect(0, 0, 120, 100);
   
-  // Rooms
   for (const [name, room] of Object.entries(rooms)) {
     minimapCtx.fillStyle = room.color;
     minimapCtx.globalAlpha = 0.7;
@@ -992,13 +1033,11 @@ function drawMinimap() {
   }
   minimapCtx.globalAlpha = 1;
   
-  // Doober position
   minimapCtx.fillStyle = '#f39c12';
   minimapCtx.beginPath();
   minimapCtx.arc(doober.x * scale, doober.y * scale, 3, 0, Math.PI * 2);
   minimapCtx.fill();
   
-  // Owners
   for (const owner of owners) {
     minimapCtx.fillStyle = owner.state === 'searching' ? '#e74c3c' : '#3498db';
     minimapCtx.beginPath();
@@ -1006,7 +1045,6 @@ function drawMinimap() {
     minimapCtx.fill();
   }
   
-  // Viewport box
   minimapCtx.strokeStyle = '#fff';
   minimapCtx.lineWidth = 1;
   minimapCtx.strokeRect(camera.x * scale, camera.y * scale, VIEWPORT_COLS * scale, VIEWPORT_ROWS * scale);
@@ -1022,8 +1060,9 @@ function startGame() {
   mischiefLevel = 0;
   angerLevel = 100;
   doober.x = 8; doober.y = 17;
-  doober.targetX = 8; doober.targetY = 17;
+  doober.velX = 0; doober.velY = 0;
   doober.hidden = false;
+  keys.up = keys.down = keys.left = keys.right = false;
   mischiefSpots.forEach(s => s.used = false);
   
   owners[0].x = owners[0].homeX; owners[0].y = owners[0].homeY;
