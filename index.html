@@ -975,11 +975,21 @@ function draw() {
     const cx = ox + TILE/2;
     const cy = oy + TILE/2;
     
-    // Update owner animation
-    owner.animTimer++;
-    if (owner.animTimer >= 10) {
-      owner.animTimer = 0;
-      owner.animFrame = (owner.animFrame + 1) % 4;
+    // Update owner animation - speed tied to movement state
+    if (owner.state === 'searching' || owner.state === 'returning') {
+      // Walking - animate based on owner speed
+      owner.animTimer += owner.speed * 30;
+      if (owner.animTimer >= 1) {
+        owner.animTimer = 0;
+        owner.animFrame = (owner.animFrame + 1) % 4;
+      }
+    } else {
+      // Idle - slow subtle animation
+      owner.animTimer += 0.03;
+      if (owner.animTimer >= 1) {
+        owner.animTimer = 0;
+        owner.animFrame = (owner.animFrame + 1) % 4;
+      }
     }
     
     // Determine sprite row based on state
@@ -1164,11 +1174,22 @@ function draw() {
   const dooberScreenX = (doober.x - camera.x) * TILE;
   const dooberScreenY = (doober.y - camera.y) * TILE;
   
-  // Update Doober animation
-  doober.animTimer++;
-  if (doober.animTimer >= 8) { // Animation speed
-    doober.animTimer = 0;
-    doober.animFrame = (doober.animFrame + 1) % 4;
+  // Update Doober animation - speed tied to movement
+  const speed = Math.sqrt(doober.velX ** 2 + doober.velY ** 2);
+  if (doober.moving && speed > 0.01) {
+    // Faster movement = faster animation
+    doober.animTimer += speed * 50;
+    if (doober.animTimer >= 1) {
+      doober.animTimer = 0;
+      doober.animFrame = (doober.animFrame + 1) % 4;
+    }
+  } else {
+    // Idle animation - slow bobbing
+    doober.animTimer += 0.05;
+    if (doober.animTimer >= 1) {
+      doober.animTimer = 0;
+      doober.animFrame = (doober.animFrame + 1) % 4;
+    }
   }
   
   // Determine direction based on velocity
