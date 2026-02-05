@@ -179,6 +179,65 @@ const ctx = canvas.getContext('2d');
 const minimapCanvas = document.getElementById('minimap');
 const minimapCtx = minimapCanvas.getContext('2d');
 
+// ============================================
+// SPRITE LOADING SYSTEM
+// ============================================
+const sprites = {
+  doober: { img: null, loaded: false, frameWidth: 64, frameHeight: 64 },
+  mom: { img: null, loaded: false, frameWidth: 64, frameHeight: 64 },
+  dad: { img: null, loaded: false, frameWidth: 64, frameHeight: 64 },
+};
+
+let spritesLoaded = 0;
+const totalSprites = 3;
+
+function loadSprite(name, src) {
+  const img = new Image();
+  img.onload = () => {
+    sprites[name].img = img;
+    sprites[name].loaded = true;
+    // Auto-detect frame size (assume 4x4 grid)
+    sprites[name].frameWidth = img.width / 4;
+    sprites[name].frameHeight = img.height / 4;
+    spritesLoaded++;
+    console.log(`Loaded sprite: ${name} (${img.width}x${img.height}, frame: ${sprites[name].frameWidth}x${sprites[name].frameHeight})`);
+  };
+  img.onerror = () => {
+    console.warn(`Failed to load sprite: ${name}, using fallback`);
+    spritesLoaded++; // Count as loaded to not block game
+  };
+  img.src = src;
+}
+
+// Load all sprites
+loadSprite('doober', 'assets/sprites/doober-spritesheet.png');
+loadSprite('mom', 'assets/sprites/mom-spritesheet.png');
+loadSprite('dad', 'assets/sprites/dad-spritesheet.png');
+
+// Draw a sprite frame from a spritesheet
+function drawSprite(spriteName, frameX, frameY, x, y, scale = 1, flipX = false) {
+  const sprite = sprites[spriteName];
+  if (!sprite || !sprite.loaded || !sprite.img) return false;
+  
+  const fw = sprite.frameWidth;
+  const fh = sprite.frameHeight;
+  const drawW = fw * scale;
+  const drawH = fh * scale;
+  
+  ctx.save();
+  if (flipX) {
+    ctx.translate(x + drawW/2, y);
+    ctx.scale(-1, 1);
+    ctx.translate(-drawW/2, 0);
+    ctx.drawImage(sprite.img, frameX * fw, frameY * fh, fw, fh, 0, 0, drawW, drawH);
+  } else {
+    ctx.drawImage(sprite.img, frameX * fw, frameY * fh, fw, fh, x, y, drawW, drawH);
+  }
+  ctx.restore();
+  return true;
+}
+// ============================================
+
 // Responsive sizing - fill browser width, maintain 16:9 aspect ratio
 const TILE = 32;
 const ASPECT_RATIO = 16 / 9;
@@ -418,6 +477,10 @@ const doober = {
   tailWag: 0,
   facing: 1,
   moving: false,
+  // Animation
+  animFrame: 0,
+  animTimer: 0,
+  direction: 0, // 0=down, 1=up, 2=right, 3=left
 };
 
 // Owners
@@ -430,9 +493,13 @@ const owners = [
     speed: 0.04,
     state: 'idle',
     gender: 'female',
+    spriteName: 'mom',
     searchPath: [],
     pathIndex: 0,
-    hearts: [], // floating hearts array
+    hearts: [],
+    animFrame: 0,
+    animTimer: 0,
+    direction: 0,
   },
   {
     name: 'Dad',
@@ -442,9 +509,13 @@ const owners = [
     speed: 0.035,
     state: 'idle',
     gender: 'male',
+    spriteName: 'dad',
     searchPath: [],
     pathIndex: 0,
-    hearts: [], // floating hearts array
+    hearts: [],
+    animFrame: 0,
+    animTimer: 0,
+    direction: 0,
   },
 ];
 
@@ -904,137 +975,157 @@ function draw() {
     const cx = ox + TILE/2;
     const cy = oy + TILE/2;
     
-    // Angry pulse effect
-    let angryPulse = 0;
+    // Update owner animation
+    owner.animTimer++;
+    if (owner.animTimer >= 10) {
+      owner.animTimer = 0;
+      owner.animFrame = (owner.animFrame + 1) % 4;
+    }
+    
+    // Determine sprite row based on state
+    // Row 0: idle, Row 1: walk down, Row 2: walk right, Row 3: emotions
+    let spriteRow = 0;
+    let spriteFrame = owner.animFrame;
+    let flipX = false;
+    
+    if (owner.state === 'searching' || owner.state === 'returning') {
+      // Walking - use walk animation
+      spriteRow = 1; // Default walk down
+      // Could detect direction from path if needed
+    }
+    
+    // For emotion states, use row 3
     if (owner.state === 'searching') {
-      angryPulse = Math.sin(Date.now() / 100) * 0.3 + 0.7; // Pulse between 0.4 and 1.0
+      // Could use angry frame from row 3
     }
     
-    ctx.save();
+    // Calculate sprite scale
+    const spriteScale = TILE * 1.3 / (sprites[owner.spriteName]?.frameWidth || 64);
+    const offsetX = ox - TILE * 0.15;
+    const offsetY = oy - TILE * 0.4;
     
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + TILE/3, TILE/2.5, TILE/5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Body
-    if (owner.gender === 'female') {
-      // Dress (trapezoid shape)
-      ctx.fillStyle = '#e91e63'; // Pink dress
+    // Try to draw sprite, fall back to canvas drawing
+    if (!drawSprite(owner.spriteName, spriteFrame, spriteRow, offsetX, offsetY, spriteScale, flipX)) {
+      // Fallback: canvas-drawn owner
+      // Angry pulse effect
+      let angryPulse = 0;
+      if (owner.state === 'searching') {
+        angryPulse = Math.sin(Date.now() / 100) * 0.3 + 0.7;
+      }
+      
+      ctx.save();
+      
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
       ctx.beginPath();
-      ctx.moveTo(cx - TILE/4, cy - 2);
-      ctx.lineTo(cx + TILE/4, cy - 2);
-      ctx.lineTo(cx + TILE/3, cy + TILE/3);
-      ctx.lineTo(cx - TILE/3, cy + TILE/3);
-      ctx.closePath();
+      ctx.ellipse(cx, cy + TILE/3, TILE/2.5, TILE/5, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Dress detail
-      ctx.fillStyle = '#c2185b';
-      ctx.fillRect(cx - 2, cy + 2, 4, TILE/4);
-    } else {
-      // Male shirt
-      ctx.fillStyle = '#1976d2'; // Blue shirt
+      
+      // Body
+      if (owner.gender === 'female') {
+        ctx.fillStyle = '#e91e63';
+        ctx.beginPath();
+        ctx.moveTo(cx - TILE/4, cy - 2);
+        ctx.lineTo(cx + TILE/4, cy - 2);
+        ctx.lineTo(cx + TILE/3, cy + TILE/3);
+        ctx.lineTo(cx - TILE/3, cy + TILE/3);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#c2185b';
+        ctx.fillRect(cx - 2, cy + 2, 4, TILE/4);
+      } else {
+        ctx.fillStyle = '#1976d2';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 4, TILE/3.5, TILE/4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#5d4037';
+        ctx.fillRect(cx - TILE/5, cy + TILE/5, TILE/2.5, TILE/6);
+      }
+      
+      // Head
+      let skinColor = '#ffcc99';
+      if (owner.state === 'searching') {
+        const red = Math.floor(255 * angryPulse);
+        const green = Math.floor(120 * (1 - angryPulse * 0.5));
+        const blue = Math.floor(120 * (1 - angryPulse * 0.5));
+        skinColor = `rgb(${red}, ${green}, ${blue})`;
+      }
+      ctx.fillStyle = skinColor;
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 4, TILE/3.5, TILE/4, 0, 0, Math.PI * 2);
+      ctx.arc(cx, cy - 6, TILE/3.2, 0, Math.PI * 2);
       ctx.fill();
-      // Pants hint
-      ctx.fillStyle = '#5d4037';
-      ctx.fillRect(cx - TILE/5, cy + TILE/5, TILE/2.5, TILE/6);
+      
+      // Hair
+      if (owner.gender === 'female') {
+        ctx.fillStyle = '#5d4037';
+        ctx.beginPath();
+        ctx.arc(cx, cy - 9, TILE/3.5, Math.PI, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(cx - 7, cy - 4, 3, 8, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(cx + 7, cy - 4, 3, 8, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = '#3e2723';
+        ctx.beginPath();
+        ctx.arc(cx, cy - 10, TILE/4, Math.PI, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      // Eyes
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(cx - 4, cy - 7, 3, 0, Math.PI * 2);
+      ctx.arc(cx + 4, cy - 7, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath();
+      ctx.arc(cx - 4, cy - 7, 1.5, 0, Math.PI * 2);
+      ctx.arc(cx + 4, cy - 7, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Expression
+      if (owner.state === 'searching') {
+        ctx.strokeStyle = '#3e2723';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 7, cy - 12);
+        ctx.lineTo(cx - 2, cy - 10);
+        ctx.moveTo(cx + 7, cy - 12);
+        ctx.lineTo(cx + 2, cy - 10);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx, cy - 1, 3, 0, Math.PI, true);
+        ctx.stroke();
+        ctx.font = '10px sans-serif';
+        ctx.fillText('💢', cx + 8, cy - 14);
+      } else if (gamePhase === 'calm' || gamePhase === 'win') {
+        ctx.strokeStyle = '#d32f2f';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(cx, cy - 3, 4, 0, Math.PI);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255, 150, 150, 0.5)';
+        ctx.beginPath();
+        ctx.arc(cx - 7, cy - 4, 3, 0, Math.PI * 2);
+        ctx.arc(cx + 7, cy - 4, 3, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.strokeStyle = '#5d4037';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(cx - 3, cy - 2);
+        ctx.lineTo(cx + 3, cy - 2);
+        ctx.stroke();
+      }
+      
+      ctx.restore();
     }
-    
-    // Head
-    let skinColor = '#ffcc99';
-    if (owner.state === 'searching') {
-      // Red angry face with pulse
-      const red = Math.floor(255 * angryPulse);
-      const green = Math.floor(120 * (1 - angryPulse * 0.5));
-      const blue = Math.floor(120 * (1 - angryPulse * 0.5));
-      skinColor = `rgb(${red}, ${green}, ${blue})`;
-    }
-    ctx.fillStyle = skinColor;
-    ctx.beginPath();
-    ctx.arc(cx, cy - 6, TILE/3.2, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Hair
-    if (owner.gender === 'female') {
-      ctx.fillStyle = '#5d4037'; // Brown hair
-      ctx.beginPath();
-      ctx.arc(cx, cy - 9, TILE/3.5, Math.PI, Math.PI * 2);
-      ctx.fill();
-      // Side hair
-      ctx.beginPath();
-      ctx.ellipse(cx - 7, cy - 4, 3, 8, -0.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(cx + 7, cy - 4, 3, 8, 0.2, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.fillStyle = '#3e2723'; // Dark brown hair
-      ctx.beginPath();
-      ctx.arc(cx, cy - 10, TILE/4, Math.PI, Math.PI * 2);
-      ctx.fill();
-    }
-    
-    // Eyes
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(cx - 4, cy - 7, 3, 0, Math.PI * 2);
-    ctx.arc(cx + 4, cy - 7, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#1a1a1a';
-    ctx.beginPath();
-    ctx.arc(cx - 4, cy - 7, 1.5, 0, Math.PI * 2);
-    ctx.arc(cx + 4, cy - 7, 1.5, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Expression
-    if (owner.state === 'searching') {
-      // Angry eyebrows
-      ctx.strokeStyle = '#3e2723';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(cx - 7, cy - 12);
-      ctx.lineTo(cx - 2, cy - 10);
-      ctx.moveTo(cx + 7, cy - 12);
-      ctx.lineTo(cx + 2, cy - 10);
-      ctx.stroke();
-      // Angry mouth
-      ctx.beginPath();
-      ctx.arc(cx, cy - 1, 3, 0, Math.PI, true);
-      ctx.stroke();
-      // Anger symbol
-      ctx.font = '10px sans-serif';
-      ctx.fillText('💢', cx + 8, cy - 14);
-    } else if (gamePhase === 'calm' || gamePhase === 'win') {
-      // Happy smile
-      ctx.strokeStyle = '#d32f2f';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(cx, cy - 3, 4, 0, Math.PI);
-      ctx.stroke();
-      // Rosy cheeks
-      ctx.fillStyle = 'rgba(255, 150, 150, 0.5)';
-      ctx.beginPath();
-      ctx.arc(cx - 7, cy - 4, 3, 0, Math.PI * 2);
-      ctx.arc(cx + 7, cy - 4, 3, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      // Neutral mouth
-      ctx.strokeStyle = '#5d4037';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(cx - 3, cy - 2);
-      ctx.lineTo(cx + 3, cy - 2);
-      ctx.stroke();
-    }
-    
-    ctx.restore();
     
     // Floating hearts when happy/petting (calm or win phase)
     if (gamePhase === 'calm' || gamePhase === 'win') {
-      // Spawn new hearts occasionally
       if (Math.random() < 0.05) {
         owner.hearts.push({
           x: cx + (Math.random() - 0.5) * 20,
@@ -1046,12 +1137,11 @@ function draw() {
         });
       }
       
-      // Draw and update hearts
       for (let i = owner.hearts.length - 1; i >= 0; i--) {
         const h = owner.hearts[i];
         h.x += h.vx;
         h.y += h.vy;
-        h.vy *= 0.98; // Slow down
+        h.vy *= 0.98;
         h.life--;
         
         if (h.life <= 0) {
@@ -1066,7 +1156,6 @@ function draw() {
         ctx.globalAlpha = 1;
       }
     } else {
-      // Clear hearts when not calm
       owner.hearts = [];
     }
   }
@@ -1075,100 +1164,124 @@ function draw() {
   const dooberScreenX = (doober.x - camera.x) * TILE;
   const dooberScreenY = (doober.y - camera.y) * TILE;
   
+  // Update Doober animation
+  doober.animTimer++;
+  if (doober.animTimer >= 8) { // Animation speed
+    doober.animTimer = 0;
+    doober.animFrame = (doober.animFrame + 1) % 4;
+  }
+  
+  // Determine direction based on velocity
+  if (Math.abs(doober.velX) > Math.abs(doober.velY)) {
+    doober.direction = doober.velX > 0 ? 2 : 3; // right or left
+  } else if (Math.abs(doober.velY) > 0.01) {
+    doober.direction = doober.velY > 0 ? 0 : 1; // down or up
+  }
+  
   if (!doober.hidden || gamePhase !== 'hide') {
-    const dx = dooberScreenX + TILE/2;
-    const dy = dooberScreenY + TILE/2;
+    // Try to draw sprite, fall back to canvas drawing
+    const spriteRow = doober.moving ? (doober.direction === 1 ? 2 : (doober.direction >= 2 ? 3 : 1)) : 0;
+    const flipX = doober.direction === 3; // Flip for left-facing
+    const spriteScale = TILE * 1.2 / (sprites.doober.frameWidth || 64);
+    const offsetX = dooberScreenX - TILE * 0.1;
+    const offsetY = dooberScreenY - TILE * 0.3;
     
-    ctx.save();
-    if (doober.facing === -1) {
-      ctx.translate(dx, dy);
-      ctx.scale(-1, 1);
-      ctx.translate(-dx, -dy);
+    if (!drawSprite('doober', doober.animFrame, spriteRow, offsetX, offsetY, spriteScale, flipX)) {
+      // Fallback: canvas-drawn Doober
+      const dx = dooberScreenX + TILE/2;
+      const dy = dooberScreenY + TILE/2;
+      
+      ctx.save();
+      if (doober.facing === -1) {
+        ctx.translate(dx, dy);
+        ctx.scale(-1, 1);
+        ctx.translate(-dx, -dy);
+      }
+      
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath();
+      ctx.ellipse(dx, dy + TILE/3, TILE/2.5, TILE/6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Body base - warm tan like real Doober
+      ctx.fillStyle = '#c87533';
+      ctx.beginPath();
+      ctx.ellipse(dx, dy, TILE/2.2, TILE/3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Black saddle marking on back
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath();
+      ctx.ellipse(dx - TILE/8, dy - 2, TILE/4, TILE/5, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // White chest - pure bright white
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(dx + TILE/6, dy + 4, TILE/4.5, TILE/3.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Head - warm tan
+      ctx.fillStyle = '#c87533';
+      ctx.beginPath();
+      ctx.arc(dx + TILE/4, dy - 3, TILE/3.5, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // White muzzle blaze - pure white
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(dx + TILE/3 + 2, dy - 1, TILE/5.5, TILE/4.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Floppy ears - rich warm tan
+      ctx.fillStyle = '#b5642a';
+      ctx.beginPath();
+      ctx.ellipse(dx + TILE/4 - 7, dy - TILE/4 + 4, 6, 12, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(dx + TILE/4 + 9, dy - TILE/4 + 3, 6, 11, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Tail with white tip
+      ctx.strokeStyle = '#c87533';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      const tailWag = Math.sin(doober.tailWag * 3) * 8;
+      ctx.moveTo(dx - TILE/3, dy);
+      ctx.quadraticCurveTo(dx - TILE/2 - 4, dy + tailWag, dx - TILE/2 - 6, dy - 6 + tailWag/2);
+      ctx.stroke();
+      // White tail tip
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(dx - TILE/2 - 4, dy - 4 + tailWag/2);
+      ctx.lineTo(dx - TILE/2 - 6, dy - 6 + tailWag/2);
+      ctx.stroke();
+      
+      // Eyes - jet black
+      ctx.fillStyle = '#0a0a0a';
+      ctx.beginPath();
+      ctx.arc(dx + TILE/4 - 2, dy - 6, 2.5, 0, Math.PI * 2);
+      ctx.arc(dx + TILE/4 + 6, dy - 6, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Eye highlights
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(dx + TILE/4 - 1, dy - 7, 1, 0, Math.PI * 2);
+      ctx.arc(dx + TILE/4 + 7, dy - 7, 1, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Nose - jet black
+      ctx.fillStyle = '#0a0a0a';
+      ctx.beginPath();
+      ctx.ellipse(dx + TILE/3 + 5, dy - 1, 3.5, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.restore();
     }
-    
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath();
-    ctx.ellipse(dx, dy + TILE/3, TILE/2.5, TILE/6, 0, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Body base - warm tan like real Doober
-    ctx.fillStyle = '#c87533';
-    ctx.beginPath();
-    ctx.ellipse(dx, dy, TILE/2.2, TILE/3, 0, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Black saddle marking on back
-    ctx.fillStyle = '#1a1a1a';
-    ctx.beginPath();
-    ctx.ellipse(dx - TILE/8, dy - 2, TILE/4, TILE/5, 0.2, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // White chest - pure bright white
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.ellipse(dx + TILE/6, dy + 4, TILE/4.5, TILE/3.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Head - warm tan
-    ctx.fillStyle = '#c87533';
-    ctx.beginPath();
-    ctx.arc(dx + TILE/4, dy - 3, TILE/3.5, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // White muzzle blaze - pure white
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.ellipse(dx + TILE/3 + 2, dy - 1, TILE/5.5, TILE/4.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Floppy ears - rich warm tan
-    ctx.fillStyle = '#b5642a';
-    ctx.beginPath();
-    ctx.ellipse(dx + TILE/4 - 7, dy - TILE/4 + 4, 6, 12, -0.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(dx + TILE/4 + 9, dy - TILE/4 + 3, 6, 11, 0.3, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Tail with white tip
-    ctx.strokeStyle = '#c87533';
-    ctx.lineWidth = 4;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    const tailWag = Math.sin(doober.tailWag * 3) * 8;
-    ctx.moveTo(dx - TILE/3, dy);
-    ctx.quadraticCurveTo(dx - TILE/2 - 4, dy + tailWag, dx - TILE/2 - 6, dy - 6 + tailWag/2);
-    ctx.stroke();
-    // White tail tip
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(dx - TILE/2 - 4, dy - 4 + tailWag/2);
-    ctx.lineTo(dx - TILE/2 - 6, dy - 6 + tailWag/2);
-    ctx.stroke();
-    
-    // Eyes - jet black
-    ctx.fillStyle = '#0a0a0a';
-    ctx.beginPath();
-    ctx.arc(dx + TILE/4 - 2, dy - 6, 2.5, 0, Math.PI * 2);
-    ctx.arc(dx + TILE/4 + 6, dy - 6, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Eye highlights
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(dx + TILE/4 - 1, dy - 7, 1, 0, Math.PI * 2);
-    ctx.arc(dx + TILE/4 + 7, dy - 7, 1, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Nose - jet black
-    ctx.fillStyle = '#0a0a0a';
-    ctx.beginPath();
-    ctx.ellipse(dx + TILE/3 + 5, dy - 1, 3.5, 2.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    
-    ctx.restore();
   } else {
     ctx.globalAlpha = 0.35;
     ctx.fillStyle = '#c87533';
