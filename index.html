@@ -188,6 +188,12 @@ const sprites = {
   dad: { img: null, loaded: false, frameWidth: 64, frameHeight: 64 },
 };
 
+// Tileset images
+const tilesets = {
+  floors: { img: null, loaded: false },
+  furniture: { img: null, loaded: false },
+};
+
 let spritesLoaded = 0;
 const totalSprites = 3;
 
@@ -209,10 +215,27 @@ function loadSprite(name, src) {
   img.src = src;
 }
 
+function loadTileset(name, src) {
+  const img = new Image();
+  img.onload = () => {
+    tilesets[name].img = img;
+    tilesets[name].loaded = true;
+    console.log(`Loaded tileset: ${name} (${img.width}x${img.height})`);
+  };
+  img.onerror = () => {
+    console.warn(`Failed to load tileset: ${name}, using fallback colors`);
+  };
+  img.src = src;
+}
+
 // Load all sprites
 loadSprite('doober', 'assets/sprites/doober-spritesheet.png');
 loadSprite('mom', 'assets/sprites/mom-spritesheet.png');
 loadSprite('dad', 'assets/sprites/dad-spritesheet.png');
+
+// Load tilesets
+loadTileset('floors', 'assets/sprites/floor-tiles.png');
+loadTileset('furniture', 'assets/sprites/furniture-tiles.png');
 
 // Draw a sprite frame from a spritesheet
 function drawSprite(spriteName, frameX, frameY, x, y, scale = 1, flipX = false) {
@@ -586,23 +609,37 @@ function findPath(startX, startY, endX, endY) {
 }
 
 // Colors
+// Stardew Valley inspired color palette
 const colors = {
-  [T.FLOOR]: '#f5e6d3',
-  [T.WALL]: '#5c4033',
-  [T.FURNITURE]: '#8b6914',
-  [T.MISCHIEF]: '#ffeaa7',
-  [T.HIDING]: '#a29bfe',
-  [T.DOOR]: '#d4a574',
-  [T.GRASS]: '#7cb342',
-  [T.WATER]: '#4fc3f7',
-  [T.COUNTER]: '#a0826d',
-  [T.TABLE]: '#8d6e63',
-  [T.COUCH]: '#7986cb',
-  [T.BED]: '#ce93d8',
-  [T.TV]: '#37474f',
-  [T.TOILET]: '#e0e0e0',
-  [T.TUB]: '#b3e5fc',
-  [T.FENCE]: '#6d4c41',
+  [T.FLOOR]: '#d4a574',     // Warm wood floor
+  [T.WALL]: '#8b7355',      // Rich brown walls
+  [T.FURNITURE]: '#a67c52', // Warm furniture wood
+  [T.MISCHIEF]: '#ffeb99',  // Glowing yellow highlight
+  [T.HIDING]: '#9b8bd4',    // Soft purple
+  [T.DOOR]: '#c9956c',      // Door frame
+  [T.GRASS]: '#5a9c3e',     // Vibrant grass green
+  [T.WATER]: '#5bb5d4',     // Clear water blue
+  [T.COUNTER]: '#b8956e',   // Kitchen counter
+  [T.TABLE]: '#9c7a5a',     // Dining table
+  [T.COUCH]: '#6b7ec2',     // Cozy blue-purple couch
+  [T.BED]: '#c490b8',       // Soft pink/purple bed
+  [T.TV]: '#3a4a5a',        // Dark TV
+  [T.TOILET]: '#e8e8e8',    // White porcelain
+  [T.TUB]: '#a8d8ea',       // Light blue tub
+  [T.FENCE]: '#7a5c45',     // Wood fence
+};
+
+// Room colors - warmer, more saturated Stardew palette
+const roomColors = {
+  'Kitchen': '#e8d4b8',      // Warm cream kitchen
+  'Dining Room': '#dcc8a8',  // Soft tan dining
+  'Living Room': '#d8c4a4',  // Cozy living room
+  'Entry': '#c8b898',        // Welcoming entry
+  'Backyard': '#7cb860',     // Lush grass
+  'Bathroom': '#c8e0e8',     // Clean blue-white
+  'Bedroom': '#e0d0c0',      // Soft bedroom
+  "Kid's Room": '#e8dcc8',   // Warm kid's room
+  'Hallway': '#c8b8a0',      // Neutral hallway
 };
 
 // Input - track held keys for smooth movement
@@ -883,65 +920,113 @@ function draw() {
       let floorColor = colors[tile] || colors[T.FLOOR];
       if (tile === T.FLOOR || tile === T.DOOR) {
         const roomName = getCurrentRoom(mapX, mapY);
-        for (const [key, room] of Object.entries(rooms)) {
-          if (room.name === roomName) {
-            floorColor = room.color;
-            break;
-          }
+        // Use new roomColors palette
+        if (roomColors[roomName]) {
+          floorColor = roomColors[roomName];
         }
       }
       
       ctx.fillStyle = floorColor;
       ctx.fillRect(screenX, screenY, TILE + 1, TILE + 1);
       
+      // Add subtle wood grain pattern to floors
+      if (tile === T.FLOOR || tile === T.DOOR) {
+        ctx.fillStyle = 'rgba(0,0,0,0.03)';
+        for (let i = 0; i < 3; i++) {
+          ctx.fillRect(screenX + (mapX * 7 + i * 11) % TILE, screenY, 1, TILE);
+        }
+      }
+      
       if (tile === T.WALL) {
+        // Rich textured walls
         ctx.fillStyle = colors[T.WALL];
         ctx.fillRect(screenX, screenY, TILE, TILE);
-        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        // Highlight at top
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.fillRect(screenX, screenY, TILE, 2);
+        // Shadow at bottom
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
         ctx.fillRect(screenX, screenY + TILE - 3, TILE, 3);
+        // Subtle vertical grain
+        ctx.fillStyle = 'rgba(0,0,0,0.05)';
+        ctx.fillRect(screenX + 8, screenY, 1, TILE);
+        ctx.fillRect(screenX + 24, screenY, 1, TILE);
       } else if (tile === T.COUNTER || tile === T.TABLE || tile === T.FURNITURE) {
+        // Rounded furniture with highlight
         ctx.fillStyle = colors[tile];
         ctx.fillRect(screenX + 2, screenY + 2, TILE - 4, TILE - 4);
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        ctx.fillRect(screenX + 3, screenY + 3, TILE - 6, 2);
         ctx.fillStyle = 'rgba(0,0,0,0.15)';
         ctx.fillRect(screenX + 2, screenY + TILE - 5, TILE - 4, 3);
       } else if (tile === T.COUCH) {
+        // Cozy couch with cushion detail
         ctx.fillStyle = colors[T.COUCH];
         ctx.fillRect(screenX + 1, screenY + 1, TILE - 2, TILE - 2);
-        ctx.fillStyle = 'rgba(255,255,255,0.2)';
-        ctx.fillRect(screenX + 4, screenY + 4, TILE - 8, 5);
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.fillRect(screenX + 4, screenY + 4, TILE - 8, 6);
+        ctx.fillStyle = 'rgba(0,0,0,0.1)';
+        ctx.fillRect(screenX + 4, screenY + 12, TILE - 8, 2);
       } else if (tile === T.BED) {
+        // Comfy bed with pillow
         ctx.fillStyle = colors[T.BED];
         ctx.fillRect(screenX + 1, screenY + 1, TILE - 2, TILE - 2);
-        ctx.fillStyle = 'rgba(255,255,255,0.3)';
-        ctx.fillRect(screenX + 3, screenY + 3, TILE - 10, TILE - 6);
+        // Pillow
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(screenX + 3, screenY + 3, TILE - 10, 8);
+        ctx.fillStyle = 'rgba(0,0,0,0.05)';
+        ctx.fillRect(screenX + 3, screenY + 9, TILE - 10, 2);
+        // Blanket fold
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        ctx.fillRect(screenX + 3, screenY + 14, TILE - 6, 2);
       } else if (tile === T.TV) {
+        // TV with glowing screen
         ctx.fillStyle = colors[T.TV];
         ctx.fillRect(screenX + 2, screenY + 2, TILE - 4, TILE - 4);
-        ctx.fillStyle = '#90caf9';
+        // Screen glow
+        ctx.fillStyle = '#a0d4f7';
         ctx.fillRect(screenX + 5, screenY + 5, TILE - 10, TILE - 12);
+        // Screen reflection
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillRect(screenX + 6, screenY + 6, 4, 2);
       } else if (tile === T.GRASS) {
-        ctx.fillStyle = '#8bc34a';
-        for (let i = 0; i < 3; i++) {
-          const gx = screenX + 4 + (i * 10);
-          const gy = screenY + 16 + Math.sin(mapX + mapY + i) * 4;
-          ctx.fillRect(gx, gy, 2, 6);
+        // Lush grass with blades
+        ctx.fillStyle = roomColors['Backyard'];
+        ctx.fillRect(screenX, screenY, TILE + 1, TILE + 1);
+        ctx.fillStyle = '#4a8c30';
+        for (let i = 0; i < 4; i++) {
+          const gx = screenX + 4 + (i * 7) + ((mapX + mapY) % 3);
+          const gy = screenY + 12 + Math.sin(mapX + mapY + i) * 4;
+          ctx.fillRect(gx, gy, 2, 8);
         }
       } else if (tile === T.FENCE) {
         ctx.fillStyle = colors[T.FENCE];
         ctx.fillRect(screenX + TILE/2 - 2, screenY, 4, TILE);
         ctx.fillRect(screenX, screenY + 6, TILE, 3);
         ctx.fillRect(screenX, screenY + TILE - 9, TILE, 3);
+        // Wood grain
+        ctx.fillStyle = 'rgba(0,0,0,0.1)';
+        ctx.fillRect(screenX + TILE/2 - 1, screenY, 1, TILE);
       } else if (tile === T.TOILET) {
         ctx.fillStyle = colors[T.TOILET];
         ctx.beginPath();
         ctx.ellipse(screenX + TILE/2, screenY + TILE/2, TILE/3, TILE/2.5, 0, 0, Math.PI * 2);
         ctx.fill();
+        // Rim shadow
+        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
       } else if (tile === T.TUB) {
         ctx.fillStyle = colors[T.TUB];
         ctx.fillRect(screenX + 2, screenY + 2, TILE - 4, TILE - 4);
-        ctx.strokeStyle = '#81d4fa';
+        ctx.strokeStyle = '#6bc4e8';
         ctx.lineWidth = 2;
         ctx.strokeRect(screenX + 2, screenY + 2, TILE - 4, TILE - 4);
+        // Water ripple
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        ctx.beginPath();
+        ctx.arc(screenX + TILE/2, screenY + TILE/2, 6, 0, Math.PI * 2);
+        ctx.stroke();
       }
       
       if (tile === T.MISCHIEF && gamePhase === 'mischief') {
