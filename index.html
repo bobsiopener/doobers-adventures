@@ -144,6 +144,355 @@
       text-align: center;
       font-size: 12px;
     }
+    
+    /* ============================================ */
+    /* TITLE SCREEN STYLES */
+    /* ============================================ */
+    @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700&display=swap');
+    
+    #title-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(180deg, #87CEEB 0%, #98D8AA 60%, #5D8233 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 500;
+      overflow: hidden;
+    }
+    
+    #title-screen.hidden {
+      display: none;
+    }
+    
+    .title-clouds {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 40%;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    
+    .cloud {
+      position: absolute;
+      background: white;
+      border-radius: 50px;
+      opacity: 0.9;
+      animation: float-cloud 20s linear infinite;
+    }
+    
+    .cloud::before, .cloud::after {
+      content: '';
+      position: absolute;
+      background: white;
+      border-radius: 50%;
+    }
+    
+    .cloud-1 { width: 80px; height: 30px; top: 15%; left: -100px; animation-duration: 25s; }
+    .cloud-1::before { width: 40px; height: 40px; top: -20px; left: 10px; }
+    .cloud-1::after { width: 50px; height: 50px; top: -25px; left: 35px; }
+    
+    .cloud-2 { width: 100px; height: 35px; top: 25%; left: -120px; animation-duration: 30s; animation-delay: 5s; }
+    .cloud-2::before { width: 50px; height: 50px; top: -25px; left: 15px; }
+    .cloud-2::after { width: 60px; height: 60px; top: -30px; left: 45px; }
+    
+    .cloud-3 { width: 70px; height: 25px; top: 10%; left: -80px; animation-duration: 22s; animation-delay: 10s; }
+    .cloud-3::before { width: 35px; height: 35px; top: -18px; left: 8px; }
+    .cloud-3::after { width: 45px; height: 45px; top: -22px; left: 30px; }
+    
+    @keyframes float-cloud {
+      from { transform: translateX(0); }
+      to { transform: translateX(calc(100vw + 200px)); }
+    }
+    
+    .title-house {
+      position: absolute;
+      bottom: 15%;
+      width: 200px;
+      height: 150px;
+      background: #D4A574;
+      border: 4px solid #8B4513;
+      border-radius: 5px;
+    }
+    
+    .title-house::before {
+      content: '';
+      position: absolute;
+      top: -80px;
+      left: -20px;
+      width: 0;
+      height: 0;
+      border-left: 120px solid transparent;
+      border-right: 120px solid transparent;
+      border-bottom: 80px solid #8B4513;
+    }
+    
+    .title-logo {
+      position: relative;
+      z-index: 10;
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    
+    .title-main {
+      font-family: 'Fredoka One', cursive;
+      font-size: 64px;
+      color: #8B4513;
+      text-shadow: 
+        4px 4px 0 #FFF,
+        -2px -2px 0 #FFF,
+        2px -2px 0 #FFF,
+        -2px 2px 0 #FFF,
+        0 6px 0 rgba(0,0,0,0.2);
+      animation: title-bounce 2s ease-in-out infinite;
+    }
+    
+    .title-subtitle {
+      font-family: 'Nunito', sans-serif;
+      font-size: 24px;
+      color: #5D4E37;
+      margin-top: 10px;
+      text-shadow: 1px 1px 0 #FFF;
+    }
+    
+    .title-doober {
+      font-size: 80px;
+      animation: doober-wiggle 1s ease-in-out infinite;
+      display: inline-block;
+    }
+    
+    @keyframes title-bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    
+    @keyframes doober-wiggle {
+      0%, 100% { transform: rotate(-5deg); }
+      50% { transform: rotate(5deg); }
+    }
+    
+    .menu-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      z-index: 10;
+    }
+    
+    .menu-btn {
+      font-family: 'Fredoka One', cursive;
+      font-size: 24px;
+      padding: 16px 48px;
+      border: 4px solid #5D4E37;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.3);
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .menu-btn:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 0 rgba(0,0,0,0.3);
+    }
+    
+    .menu-btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 2px 0 rgba(0,0,0,0.3);
+    }
+    
+    .btn-play {
+      background: linear-gradient(180deg, #4CAF50, #388E3C);
+      color: white;
+    }
+    
+    .btn-how {
+      background: linear-gradient(180deg, #2196F3, #1976D2);
+      color: white;
+    }
+    
+    .btn-credits {
+      background: linear-gradient(180deg, #9C27B0, #7B1FA2);
+      color: white;
+    }
+    
+    /* How to Play Modal */
+    #how-to-play {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.85);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 600;
+      padding: 20px;
+    }
+    
+    #how-to-play.visible {
+      display: flex;
+    }
+    
+    .modal-content {
+      background: linear-gradient(180deg, #FFF8E7, #FFE4B5);
+      border: 4px solid #8B4513;
+      border-radius: 20px;
+      padding: 30px 40px;
+      max-width: 500px;
+      text-align: center;
+      font-family: 'Nunito', sans-serif;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    
+    .modal-content h2 {
+      font-family: 'Fredoka One', cursive;
+      color: #8B4513;
+      font-size: 32px;
+      margin-bottom: 20px;
+    }
+    
+    .how-section {
+      text-align: left;
+      margin: 20px 0;
+      padding: 15px;
+      background: rgba(255,255,255,0.5);
+      border-radius: 10px;
+    }
+    
+    .how-section h3 {
+      color: #5D4E37;
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+    
+    .how-section p {
+      color: #666;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    
+    .controls-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    
+    .control-key {
+      background: #333;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-weight: bold;
+      font-size: 12px;
+    }
+    
+    /* Credits Modal */
+    #credits-modal {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.85);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 600;
+      padding: 20px;
+    }
+    
+    #credits-modal.visible {
+      display: flex;
+    }
+    
+    .credits-content {
+      background: linear-gradient(180deg, #2C3E50, #1a252f);
+      border: 4px solid #F39C12;
+      border-radius: 20px;
+      padding: 30px 40px;
+      max-width: 400px;
+      text-align: center;
+      font-family: 'Nunito', sans-serif;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      color: white;
+    }
+    
+    .credits-content h2 {
+      font-family: 'Fredoka One', cursive;
+      color: #F39C12;
+      font-size: 32px;
+      margin-bottom: 20px;
+    }
+    
+    .credit-line {
+      margin: 12px 0;
+      font-size: 16px;
+    }
+    
+    .credit-line strong {
+      color: #F39C12;
+    }
+    
+    .close-btn {
+      margin-top: 20px;
+      font-family: 'Fredoka One', cursive;
+      font-size: 18px;
+      padding: 12px 32px;
+      background: linear-gradient(180deg, #E74C3C, #C0392B);
+      color: white;
+      border: 3px solid #922B21;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+    
+    .close-btn:hover {
+      transform: scale(1.05);
+    }
+    
+    /* Animated meter improvements */
+    .meter-bar {
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .meter-bar::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 50%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+      animation: meter-shine 2s ease-in-out infinite;
+    }
+    
+    @keyframes meter-shine {
+      0% { left: -100%; }
+      50%, 100% { left: 100%; }
+    }
+    
+    /* Phase transition animation */
+    .phase-flash {
+      animation: phase-flash 0.5s ease-out;
+    }
+    
+    @keyframes phase-flash {
+      0% { transform: translateX(-50%) scale(1.5); opacity: 0; }
+      50% { opacity: 1; }
+      100% { transform: translateX(-50%) scale(1); }
+    }
   </style>
 </head>
 <body>
@@ -165,6 +514,76 @@
     <div id="message">
       <div id="message-text"></div>
       <button onclick="startGame()">Play Again</button>
+      <button onclick="returnToMenu()" style="margin-left: 10px; background: linear-gradient(135deg, #3498db, #2980b9);">Main Menu</button>
+    </div>
+    
+    <!-- Title Screen -->
+    <div id="title-screen">
+      <div class="title-clouds">
+        <div class="cloud cloud-1"></div>
+        <div class="cloud cloud-2"></div>
+        <div class="cloud cloud-3"></div>
+      </div>
+      
+      <div class="title-logo">
+        <div class="title-doober">🐕</div>
+        <div class="title-main">Doober's Adventures</div>
+        <div class="title-subtitle">A Mischievous Beagle's Tale</div>
+      </div>
+      
+      <div class="menu-buttons">
+        <button class="menu-btn btn-play" onclick="startGameFromMenu()">🎮 Play Game</button>
+        <button class="menu-btn btn-how" onclick="showHowToPlay()">📖 How to Play</button>
+        <button class="menu-btn btn-credits" onclick="showCredits()">⭐ Credits</button>
+      </div>
+    </div>
+    
+    <!-- How to Play Modal -->
+    <div id="how-to-play">
+      <div class="modal-content">
+        <h2>📖 How to Play</h2>
+        
+        <div class="how-section">
+          <h3>🎯 Goal</h3>
+          <p>Be a mischievous beagle! Cause trouble around the house, but don't get caught by Mom or Dad!</p>
+        </div>
+        
+        <div class="how-section">
+          <h3>🕹️ Controls</h3>
+          <div class="controls-grid">
+            <span class="control-key">↑ W</span><span>Move Up</span>
+            <span class="control-key">↓ S</span><span>Move Down</span>
+            <span class="control-key">← A</span><span>Move Left</span>
+            <span class="control-key">→ D</span><span>Move Right</span>
+          </div>
+        </div>
+        
+        <div class="how-section">
+          <h3>🐕 Gameplay</h3>
+          <p><strong>Phase 1:</strong> Fill the mischief meter by causing trouble!<br>
+          <strong>Phase 2:</strong> Hide until the owners calm down!<br>
+          Win their love to become the ultimate good boy! 💕</p>
+        </div>
+        
+        <button class="close-btn" onclick="hideHowToPlay()">Got It!</button>
+      </div>
+    </div>
+    
+    <!-- Credits Modal -->
+    <div id="credits-modal">
+      <div class="credits-content">
+        <h2>⭐ Credits</h2>
+        
+        <div class="credit-line"><strong>Game Design:</strong> Bob Bullock</div>
+        <div class="credit-line"><strong>Art Style:</strong> Inspired by Stardew Valley</div>
+        <div class="credit-line"><strong>Sprites:</strong> AI Generated (Gemini)</div>
+        <div class="credit-line"><strong>Code:</strong> OpenClaw AI</div>
+        <div class="credit-line" style="margin-top: 20px; font-size: 14px; opacity: 0.8;">
+          Made with 🐕💕 for all the mischievous beagles out there!
+        </div>
+        
+        <button class="close-btn" onclick="hideCredits()">Back</button>
+      </div>
     </div>
   </div>
   <div id="instructions">Arrow keys / WASD to move • Cause trouble • Hide when owners are mad!</div>
@@ -849,6 +1268,7 @@ function update() {
       });
       document.getElementById('mischief-meter').style.display = 'none';
       document.getElementById('anger-meter').style.display = 'block';
+      animatePhaseChange('🙈 HIDE! Owners are looking!');
     }
   } else if (gamePhase === 'hide') {
     document.getElementById('phase-indicator').textContent = '🙈 HIDE! Owners are looking!';
@@ -873,6 +1293,7 @@ function update() {
         o.state = 'returning';
         o.searchPath = [];
       });
+      animatePhaseChange('💕 Go get love from owners!');
     }
   } else if (gamePhase === 'calm') {
     document.getElementById('phase-indicator').textContent = '💕 Go get love from owners!';
@@ -1467,13 +1888,74 @@ function startGame() {
   floatingTexts = [];
 }
 
+// ============================================
+// MENU SYSTEM
+// ============================================
+let gameStarted = false;
+
+function showTitleScreen() {
+  document.getElementById('title-screen').classList.remove('hidden');
+  document.getElementById('ui').style.display = 'none';
+  document.getElementById('phase-indicator').style.display = 'none';
+  document.getElementById('minimap').style.display = 'none';
+  document.getElementById('instructions').style.display = 'none';
+}
+
+function hideTitleScreen() {
+  document.getElementById('title-screen').classList.add('hidden');
+  document.getElementById('ui').style.display = 'flex';
+  document.getElementById('phase-indicator').style.display = 'block';
+  document.getElementById('minimap').style.display = 'block';
+  document.getElementById('instructions').style.display = 'block';
+}
+
+function startGameFromMenu() {
+  hideTitleScreen();
+  gameStarted = true;
+  startGame();
+}
+
+function showHowToPlay() {
+  document.getElementById('how-to-play').classList.add('visible');
+}
+
+function hideHowToPlay() {
+  document.getElementById('how-to-play').classList.remove('visible');
+}
+
+function showCredits() {
+  document.getElementById('credits-modal').classList.add('visible');
+}
+
+function hideCredits() {
+  document.getElementById('credits-modal').classList.remove('visible');
+}
+
+function returnToMenu() {
+  document.getElementById('message').style.display = 'none';
+  gameStarted = false;
+  showTitleScreen();
+}
+
+// Phase transition animation
+function animatePhaseChange(text) {
+  const indicator = document.getElementById('phase-indicator');
+  indicator.textContent = text;
+  indicator.classList.remove('phase-flash');
+  void indicator.offsetWidth; // Trigger reflow
+  indicator.classList.add('phase-flash');
+}
+
 function gameLoop() {
-  update();
+  if (gameStarted) {
+    update();
+  }
   draw();
   requestAnimationFrame(gameLoop);
 }
 
-startGame();
+// Start with title screen visible
+showTitleScreen();
 gameLoop();
 </script>
 </body>
