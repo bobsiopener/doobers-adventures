@@ -636,100 +636,6 @@
 // ============================================
 // AUDIO SYSTEM (Synthesized placeholders)
 // ============================================
-const SoundManager = {
-  ctx: null,
-  muted: false,
-  initialized: false,
-  
-  init() {
-    if (this.initialized) return;
-    try {
-      window.AudioContext = window.AudioContext || window.webkitAudioContext;
-      this.ctx = new AudioContext();
-      this.initialized = true;
-      console.log('Audio initialized');
-    } catch (e) {
-      console.warn('Audio init failed', e);
-    }
-  },
-  
-  playTone(freq, type, duration, vol = 0.1) {
-    if (!this.ctx || this.muted) return;
-    if (this.ctx.state === 'suspended') this.ctx.resume();
-    
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-    gain.gain.setValueAtTime(vol, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start();
-    osc.stop(this.ctx.currentTime + duration);
-  },
-  
-  play(name) {
-    if (!this.initialized) this.init();
-    if (!this.ctx) return;
-    
-    switch (name) {
-      case 'footstep':
-        // Very quiet click
-        if (Math.random() > 0.5) return; // Don't play every step
-        this.playTone(100 + Math.random()*20, 'triangle', 0.05, 0.02);
-        break;
-      case 'mischief':
-        // High pitched playfulness
-        this.playTone(400, 'sine', 0.1, 0.1);
-        setTimeout(() => this.playTone(600, 'sine', 0.1, 0.1), 100);
-        break;
-      case 'points':
-        // Coin-like sound
-        this.playTone(1200, 'sine', 0.1, 0.05);
-        setTimeout(() => this.playTone(1800, 'square', 0.1, 0.05), 50);
-        break;
-      case 'phase_alert':
-        // Warning siren
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(400, this.ctx.currentTime);
-        osc.frequency.linearRampToValueAtTime(800, this.ctx.currentTime + 0.3);
-        gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.3);
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start();
-        osc.stop(this.ctx.currentTime + 0.3);
-        break;
-      case 'phase_calm':
-        // Gentle chord
-        [300, 400, 500].forEach((f, i) => {
-          setTimeout(() => this.playTone(f, 'sine', 1.0, 0.05), i * 50);
-        });
-        break;
-      case 'caught':
-        // Dissonant sad sound
-        this.playTone(150, 'sawtooth', 0.4, 0.2);
-        this.playTone(140, 'sawtooth', 0.4, 0.2);
-        setTimeout(() => this.playTone(100, 'sawtooth', 0.6, 0.2), 300);
-        break;
-      case 'win':
-        // Victory fanfare
-        [400, 500, 600, 800, 1000].forEach((f, i) => {
-          setTimeout(() => this.playTone(f, 'square', 0.2, 0.1), i * 100);
-        });
-        break;
-      case 'bark':
-        this.playTone(300, 'square', 0.1, 0.1);
-        setTimeout(() => this.playTone(200, 'sawtooth', 0.1, 0.1), 50);
-        break;
-    }
-  }
-};
-
-// ============================================
 // MOBILE CONTROLS (Virtual Joystick)
 // ============================================
 class VirtualJoystick {
@@ -783,7 +689,7 @@ class VirtualJoystick {
     this.stick.style.transform = `translate(-50%, -50%)`;
     
     // Initialize Audio on first touch if needed
-    SoundManager.init();
+    audioManager.init();
   }
   
   onTouchMove(e) {
@@ -1662,9 +1568,7 @@ function update() {
         audioManager.playSfx('mischief');
         mischiefLevel = Math.min(MISCHIEF_MAX, mischiefLevel + spot.points);
         showFloatingText(spot.x * TILE, spot.y * TILE, `+${spot.points} ${spot.emoji}`, '#f39c12');
-        createParticles(spot.x * TILE + TILE/2, spot.y * TILE + TILE/2, '#f39c12', 15);
-        SoundManager.play('mischief');
-        SoundManager.play('points');
+        if (typeof createParticles === 'function') createParticles(spot.x * TILE + TILE/2, spot.y * TILE + TILE/2, '#f39c12', 15);
       }
     }
     
@@ -1689,7 +1593,7 @@ function update() {
       if (!doober.hidden && distance(doober, owner) < 2) {
         gamePhase = 'lose';
         showMessage('🐕📦 CAUGHT!<br>Doober goes in the crate...');
-        SoundManager.play('caught');
+        audioManager.playSfx('caught');
         return;
       }
     }
@@ -1705,7 +1609,7 @@ function update() {
         o.searchPath = [];
       });
       animatePhaseChange('💕 Go get love from owners!');
-      SoundManager.play('phase_calm');
+      audioManager.playSfx('phase-change');
     }
   } else if (gamePhase === 'calm') {
     document.getElementById('phase-indicator').textContent = '💕 Go get love from owners!';
@@ -1716,7 +1620,7 @@ function update() {
       if (owner.state === 'idle' && distance(doober, owner) < 2) {
         gamePhase = 'win';
         showMessage('💕💕💕 YOU WIN! 💕💕💕<br>The owners love Doober!');
-        SoundManager.play('win');
+        audioManager.playSfx('win');
         return;
       }
     }
