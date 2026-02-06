@@ -41,6 +41,22 @@
       pointer-events: none;
       z-index: 100;
     }
+    #mute-btn {
+      pointer-events: auto;
+      background: rgba(0,0,0,0.6);
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 20px;
+      color: white;
+      transition: all 0.2s;
+    }
+    #mute-btn:hover { background: rgba(0,0,0,0.8); transform: scale(1.1); }
     .meter {
       background: rgba(0,0,0,0.75);
       border-radius: 16px;
@@ -137,6 +153,31 @@
       border-radius: 8px;
       opacity: 0.8;
       z-index: 100;
+    }
+    #mute-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.75);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      font-size: 20px;
+      cursor: pointer;
+      z-index: 150;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.1s, background 0.2s;
+      backdrop-filter: blur(4px);
+    }
+    #mute-btn:hover {
+      transform: scale(1.1);
+      background: rgba(0,0,0,0.9);
+    }
+    #mute-btn.muted {
+      opacity: 0.6;
     }
     #instructions {
       color: #a0a0a0;
@@ -503,6 +544,7 @@
         <div class="meter-label">🐕 Mischief</div>
         <div class="meter-bar-bg"><div id="mischief-fill" class="meter-bar" style="width: 0%;"></div></div>
       </div>
+      <div id="mute-btn" onclick="toggleMute()">🔊</div>
       <div class="meter" id="anger-meter" style="display: none;">
         <div class="meter-label">😠 Owner Anger</div>
         <div class="meter-bar-bg"><div id="anger-fill" class="meter-bar" style="width: 100%;"></div></div>
@@ -511,6 +553,7 @@
     <div id="room-indicator">Kitchen</div>
     <div id="phase-indicator">🐕 Cause mischief!</div>
     <canvas id="minimap" width="120" height="100"></canvas>
+    <button id="mute-btn" onclick="toggleMute()" title="Toggle Sound">🔊</button>
     <div id="message">
       <div id="message-text"></div>
       <button onclick="startGame()">Play Again</button>
@@ -589,6 +632,210 @@
   <div id="instructions">Arrow keys / WASD to move • Cause trouble • Hide when owners are mad!</div>
 
 <script>
+<script>
+// ============================================
+// AUDIO SYSTEM (Synthesized placeholders)
+// ============================================
+const SoundManager = {
+  ctx: null,
+  muted: false,
+  initialized: false,
+  
+  init() {
+    if (this.initialized) return;
+    try {
+      window.AudioContext = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AudioContext();
+      this.initialized = true;
+      console.log('Audio initialized');
+    } catch (e) {
+      console.warn('Audio init failed', e);
+    }
+  },
+  
+  playTone(freq, type, duration, vol = 0.1) {
+    if (!this.ctx || this.muted) return;
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+    gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + duration);
+  },
+  
+  play(name) {
+    if (!this.initialized) this.init();
+    if (!this.ctx) return;
+    
+    switch (name) {
+      case 'footstep':
+        // Very quiet click
+        if (Math.random() > 0.5) return; // Don't play every step
+        this.playTone(100 + Math.random()*20, 'triangle', 0.05, 0.02);
+        break;
+      case 'mischief':
+        // High pitched playfulness
+        this.playTone(400, 'sine', 0.1, 0.1);
+        setTimeout(() => this.playTone(600, 'sine', 0.1, 0.1), 100);
+        break;
+      case 'points':
+        // Coin-like sound
+        this.playTone(1200, 'sine', 0.1, 0.05);
+        setTimeout(() => this.playTone(1800, 'square', 0.1, 0.05), 50);
+        break;
+      case 'phase_alert':
+        // Warning siren
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(800, this.ctx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.3);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.3);
+        break;
+      case 'phase_calm':
+        // Gentle chord
+        [300, 400, 500].forEach((f, i) => {
+          setTimeout(() => this.playTone(f, 'sine', 1.0, 0.05), i * 50);
+        });
+        break;
+      case 'caught':
+        // Dissonant sad sound
+        this.playTone(150, 'sawtooth', 0.4, 0.2);
+        this.playTone(140, 'sawtooth', 0.4, 0.2);
+        setTimeout(() => this.playTone(100, 'sawtooth', 0.6, 0.2), 300);
+        break;
+      case 'win':
+        // Victory fanfare
+        [400, 500, 600, 800, 1000].forEach((f, i) => {
+          setTimeout(() => this.playTone(f, 'square', 0.2, 0.1), i * 100);
+        });
+        break;
+      case 'bark':
+        this.playTone(300, 'square', 0.1, 0.1);
+        setTimeout(() => this.playTone(200, 'sawtooth', 0.1, 0.1), 50);
+        break;
+    }
+  }
+};
+
+// ============================================
+// MOBILE CONTROLS (Virtual Joystick)
+// ============================================
+class VirtualJoystick {
+  constructor() {
+    this.active = false;
+    this.baseX = 0;
+    this.baseY = 0;
+    this.maxDist = 50;
+    this.input = { up: false, down: false, left: false, right: false };
+    
+    // Create UI elements
+    this.base = document.createElement('div');
+    this.base.style.cssText = `
+      position: absolute; width: 100px; height: 100px;
+      border-radius: 50%; background: rgba(255, 255, 255, 0.1);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      display: none; pointer-events: none; z-index: 1000;
+      backdrop-filter: blur(2px);
+    `;
+    this.stick = document.createElement('div');
+    this.stick.style.cssText = `
+      position: absolute; width: 40px; height: 40px;
+      border-radius: 50%; background: rgba(255, 255, 255, 0.5);
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    `;
+    this.base.appendChild(this.stick);
+    document.body.appendChild(this.base);
+    
+    // Event listeners attached to game container to prevent scrolling
+    const container = document.getElementById('game-container');
+    container.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: false });
+    container.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
+    container.addEventListener('touchend', this.onTouchEnd.bind(this));
+  }
+  
+  onTouchStart(e) {
+    // Only handle first touch for movement
+    if (this.active) return;
+    
+    e.preventDefault();
+    const touch = e.changedTouches[0];
+    this.active = true;
+    this.id = touch.identifier;
+    this.baseX = touch.clientX;
+    this.baseY = touch.clientY;
+    
+    this.base.style.display = 'block';
+    this.base.style.left = (this.baseX - 50) + 'px';
+    this.base.style.top = (this.baseY - 50) + 'px';
+    this.stick.style.transform = `translate(-50%, -50%)`;
+    
+    // Initialize Audio on first touch if needed
+    SoundManager.init();
+  }
+  
+  onTouchMove(e) {
+    if (!this.active) return;
+    e.preventDefault();
+    
+    // Find our touch
+    let touch = null;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === this.id) {
+        touch = e.changedTouches[i];
+        break;
+      }
+    }
+    if (!touch) return;
+    
+    const dx = touch.clientX - this.baseX;
+    const dy = touch.clientY - this.baseY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const angle = Math.atan2(dy, dx);
+    
+    const limitDist = Math.min(dist, this.maxDist);
+    const stickX = Math.cos(angle) * limitDist;
+    const stickY = Math.sin(angle) * limitDist;
+    
+    this.stick.style.transform = `translate(calc(-50% + ${stickX}px), calc(-50% + ${stickY}px))`;
+    
+    // Deadzone of 10px
+    if (dist > 10) {
+      this.input.right = dx > 20;
+      this.input.left = dx < -20;
+      this.input.down = dy > 20;
+      this.input.up = dy < -20;
+    } else {
+      this.input = { up: false, down: false, left: false, right: false };
+    }
+  }
+  
+  onTouchEnd(e) {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === this.id) {
+        this.active = false;
+        this.base.style.display = 'none';
+        this.input = { up: false, down: false, left: false, right: false };
+        break;
+      }
+    }
+  }
+}
+
+const joystick = new VirtualJoystick();
+
 // ============================================
 // DOOBER'S ADVENTURES - Full House Edition v2
 // ============================================
@@ -597,6 +844,145 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const minimapCanvas = document.getElementById('minimap');
 const minimapCtx = minimapCanvas.getContext('2d');
+
+// ============================================
+// AUDIO SYSTEM
+// ============================================
+class AudioManager {
+  constructor() {
+    this.ctx = null;
+    this.masterGain = null;
+    this.isMuted = false;
+    this.sounds = {};
+    this.musicNodes = {};
+    this.initialized = false;
+    this.lastFootstep = 0;
+  }
+
+  init() {
+    if (this.initialized) return;
+    
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AudioContext();
+      this.masterGain = this.ctx.createGain();
+      this.masterGain.connect(this.ctx.destination);
+      this.masterGain.gain.value = 0.5; // Default volume
+      this.initialized = true;
+      console.log('Audio initialized');
+    } catch (e) {
+      console.error('Web Audio API not supported', e);
+    }
+  }
+
+  toggleMute() {
+    if (!this.initialized) this.init();
+    this.isMuted = !this.isMuted;
+    if (this.masterGain) {
+      this.masterGain.gain.value = this.isMuted ? 0 : 0.5;
+    }
+    const btn = document.getElementById('mute-btn');
+    if (btn) btn.textContent = this.isMuted ? '🔇' : '🔊';
+    return this.isMuted;
+  }
+
+  // Generate synthetic sounds using oscillators
+  playSfx(type) {
+    if (!this.initialized || this.isMuted) return;
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    switch (type) {
+      case 'footstep':
+        // Short blip
+        if (t - this.lastFootstep < 0.25) return; // Debounce footsteps
+        this.lastFootstep = t;
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(150, t);
+        osc.frequency.exponentialRampToValueAtTime(50, t + 0.05);
+        gain.gain.setValueAtTime(0.3, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+        osc.start(t);
+        osc.stop(t + 0.05);
+        break;
+
+      case 'mischief':
+        // Descending "uh oh" tone
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, t);
+        osc.frequency.linearRampToValueAtTime(200, t + 0.2);
+        gain.gain.setValueAtTime(0.5, t);
+        gain.gain.linearRampToValueAtTime(0.01, t + 0.2);
+        osc.start(t);
+        osc.stop(t + 0.2);
+        break;
+
+      case 'phase-change':
+        // Sweep up
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(200, t);
+        osc.frequency.exponentialRampToValueAtTime(800, t + 0.3);
+        gain.gain.setValueAtTime(0.3, t);
+        gain.gain.linearRampToValueAtTime(0.01, t + 0.3);
+        osc.start(t);
+        osc.stop(t + 0.3);
+        break;
+
+      case 'caught':
+        // Alarm tone
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(600, t);
+        osc.frequency.setValueAtTime(400, t + 0.25);
+        gain.gain.setValueAtTime(0.4, t);
+        gain.gain.linearRampToValueAtTime(0.01, t + 0.5);
+        osc.start(t);
+        osc.stop(t + 0.5);
+        break;
+
+      case 'win':
+        // Happy ascending notes (arpeggio)
+        this.playNote(523.25, t, 0.2); // C5
+        this.playNote(659.25, t + 0.2, 0.2); // E5
+        this.playNote(783.99, t + 0.4, 0.4); // G5
+        break;
+        
+      case 'click':
+        // Soft click
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, t);
+        gain.gain.setValueAtTime(0.1, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+        osc.start(t);
+        osc.stop(t + 0.05);
+        break;
+    }
+  }
+
+  playNote(freq, time, duration) {
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, time);
+    gain.gain.setValueAtTime(0.3, time);
+    gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
+    osc.start(time);
+    osc.stop(time + duration);
+  }
+}
+
+const audioManager = new AudioManager();
+
+function toggleMute() {
+  audioManager.toggleMute();
+}
 
 // ============================================
 // SPRITE LOADING SYSTEM
@@ -1098,8 +1484,23 @@ function getCurrentRoom(x, y) {
 
 // Floating text effects
 let floatingTexts = [];
+let particles = [];
+
 function showFloatingText(x, y, text, color = '#e74c3c') {
   floatingTexts.push({ x, y, text, color, life: 60 });
+}
+
+function createParticles(x, y, color, count = 10) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x: x, y: y,
+      vx: (Math.random() - 0.5) * 6,
+      vy: (Math.random() - 0.5) * 6,
+      life: 30 + Math.random() * 20,
+      color: color,
+      size: 3 + Math.random() * 4
+    });
+  }
 }
 
 function updateOwner(owner) {
@@ -1173,12 +1574,16 @@ function canMoveTo(x, y) {
 function update() {
   // Handle input - apply velocity based on held keys
   let inputX = 0, inputY = 0;
-  if (keys.up) inputY = -1;
-  if (keys.down) inputY = 1;
-  if (keys.left) { inputX = -1; doober.facing = -1; }
-  if (keys.right) { inputX = 1; doober.facing = 1; }
+  if (keys.up || joystick.input.up) inputY = -1;
+  if (keys.down || joystick.input.down) inputY = 1;
+  if (keys.left || joystick.input.left) { inputX = -1; doober.facing = -1; }
+  if (keys.right || joystick.input.right) { inputX = 1; doober.facing = 1; }
   
   doober.moving = inputX !== 0 || inputY !== 0;
+  
+  if (doober.moving) {
+    audioManager.playSfx('footstep');
+  }
   
   // Apply acceleration (very fast to reach top speed)
   if (inputX !== 0) {
@@ -1254,8 +1659,12 @@ function update() {
     for (const spot of mischiefSpots) {
       if (!spot.used && distance(doober, spot) < 1.2) {
         spot.used = true;
+        audioManager.playSfx('mischief');
         mischiefLevel = Math.min(MISCHIEF_MAX, mischiefLevel + spot.points);
         showFloatingText(spot.x * TILE, spot.y * TILE, `+${spot.points} ${spot.emoji}`, '#f39c12');
+        createParticles(spot.x * TILE + TILE/2, spot.y * TILE + TILE/2, '#f39c12', 15);
+        SoundManager.play('mischief');
+        SoundManager.play('points');
       }
     }
     
@@ -1269,6 +1678,7 @@ function update() {
       document.getElementById('mischief-meter').style.display = 'none';
       document.getElementById('anger-meter').style.display = 'block';
       animatePhaseChange('🙈 HIDE! Owners are looking!');
+      audioManager.playSfx('phase-change');
     }
   } else if (gamePhase === 'hide') {
     document.getElementById('phase-indicator').textContent = '🙈 HIDE! Owners are looking!';
@@ -1279,6 +1689,7 @@ function update() {
       if (!doober.hidden && distance(doober, owner) < 2) {
         gamePhase = 'lose';
         showMessage('🐕📦 CAUGHT!<br>Doober goes in the crate...');
+        SoundManager.play('caught');
         return;
       }
     }
@@ -1294,6 +1705,7 @@ function update() {
         o.searchPath = [];
       });
       animatePhaseChange('💕 Go get love from owners!');
+      SoundManager.play('phase_calm');
     }
   } else if (gamePhase === 'calm') {
     document.getElementById('phase-indicator').textContent = '💕 Go get love from owners!';
@@ -1304,6 +1716,7 @@ function update() {
       if (owner.state === 'idle' && distance(doober, owner) < 2) {
         gamePhase = 'win';
         showMessage('💕💕💕 YOU WIN! 💕💕💕<br>The owners love Doober!');
+        SoundManager.play('win');
         return;
       }
     }
@@ -1315,6 +1728,15 @@ function update() {
     floatingTexts[i].y -= 0.5;
     floatingTexts[i].life--;
     if (floatingTexts[i].life <= 0) floatingTexts.splice(i, 1);
+  }
+  
+  for (let i = particles.length - 1; i >= 0; i--) {
+    let p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.2; // Gravity
+    p.life--;
+    if (p.life <= 0) particles.splice(i, 1);
   }
 }
 
@@ -1830,6 +2252,20 @@ function draw() {
     ctx.globalAlpha = 1;
   }
   
+  // Draw particles
+  for (const p of particles) {
+    const screenX = p.x - camera.x * TILE;
+    const screenY = p.y - camera.y * TILE;
+    
+    // Simple culling
+    if (screenX < -10 || screenX > canvas.width + 10 || screenY < -10 || screenY > canvas.height + 10) continue;
+    
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = Math.max(0, p.life / 50);
+    ctx.fillRect(screenX, screenY, p.size, p.size);
+    ctx.globalAlpha = 1;
+  }
+  
   drawMinimap();
 }
 
@@ -1886,6 +2322,7 @@ function startGame() {
   document.getElementById('anger-meter').style.display = 'none';
   document.getElementById('message').style.display = 'none';
   floatingTexts = [];
+  particles = [];
 }
 
 // ============================================
@@ -1910,6 +2347,8 @@ function hideTitleScreen() {
 }
 
 function startGameFromMenu() {
+  audioManager.init();
+  audioManager.playSfx('click');
   hideTitleScreen();
   gameStarted = true;
   startGame();
